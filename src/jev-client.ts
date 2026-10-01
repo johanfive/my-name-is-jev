@@ -1,5 +1,4 @@
 import { createHash } from "node:crypto";
-import { join } from "node:path";
 import { TypeSafeClient, type Questions } from "@typesafe-ai/sdk";
 import { openCache } from "./cache.ts";
 import type { Answers, Identifier, JudgeCtx, ResolvedConfig, State } from "./types.ts";
@@ -26,12 +25,6 @@ const sha1 = (s: string) => createHash("sha1").update(s).digest("hex");
  * Specific (NIJ_JEV_*) overrides generic (TYPESAFE_*, read by the SDK).
  */
 export function createJev(config: ResolvedConfig, trace?: Trace): Jev | null {
-  try {
-    process.loadEnvFile(join(resolveProjectDir(), ".env"));
-  } catch {
-    /* no .env, fine */
-  }
-
   const keyVar = process.env.NIJ_JEV_API_KEY ? "NIJ_JEV_API_KEY" : process.env.TYPESAFE_API_KEY ? "TYPESAFE_API_KEY" : null;
   if (!keyVar) {
     process.stderr.write("nij: no Jev key found; set NIJ_JEV_API_KEY (or TYPESAFE_API_KEY). Semantic rules are skipped.\n");

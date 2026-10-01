@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { parseArgs } from "node:util";
 import { loadConfig } from "../src/config.ts";
 import { tokenize } from "../src/tokenize.ts";
-import { createJev, judgeCtx } from "../src/jev-client.ts";
+import { createJev, judgeCtx, resolveProjectDir } from "../src/jev-client.ts";
 import { fromPath } from "../src/parse/path.ts";
 import { run, selects } from "../src/pipeline.ts";
 import { formatFinding } from "../src/report.ts";
@@ -14,6 +15,13 @@ const { positionals, values } = parseArgs({
   options: { kind: { type: "string", short: "k", default: "variable" }, file: { type: "string", short: "f", default: "src/example.ts" } },
 });
 const [command, ...rest] = positionals;
+
+// The CLI is a developer tool, so the project's .env is fair game. The hook never reads it: its key comes from the agent.
+try {
+  process.loadEnvFile(join(resolveProjectDir(), ".env"));
+} catch {
+  /* no .env, fine */
+}
 
 const config = await loadConfig();
 const jev = createJev(config, (_state, _questions, answers, cached) => {

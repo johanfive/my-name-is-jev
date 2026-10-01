@@ -2,7 +2,22 @@
   "name": "my-name-is-jev",
   "description": "Naming-convention enforcement on every name the agent introduces. Shape is deterministic, meaning is Jev.",
   "version": "0.1.0",
-  "author": { "name": "johanFive" },
+  "author": {
+    "name": "johanFive"
+  },
   "license": "MIT",
-  "hooks": "./adapters/claude-code/hooks.json"
+  "hooks": "./adapters/claude-code/hooks.json",
+  "userConfig": {
+    "jev_api_key": {
+      "type": "string",
+      "title": "Jev API key",
+      "description": "TypeSafe AI key, or a key for any Jev-compatible backend. Without it only the mechanical checks run; the semantic rules are skipped.",
+      "sensitive": true
+    },
+    "jev_base_url": {
+      "type": "string",
+      "title": "Jev base URL",
+      "description": "Leave empty for TypeSafe AI. Set for another backend, such as https://openrouter.ai/api."
+    }
+  }
 }

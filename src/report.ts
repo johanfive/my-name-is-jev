@@ -6,7 +6,7 @@ export type Report = { decision: Severity; findings: Finding[]; text: string };
 /** One line per finding, written for a model to act on. */
 export const formatFinding = (f: Finding) =>
   [
-    `${f.identifier.name} (${f.identifier.kind}, ${f.identifier.file}): ${f.rule.message}`,
+    `${f.identifier.name} (${f.identifier.kind}, ${f.identifier.file}): ${f.rule.message}${/[.!?]$/.test(f.rule.message) ? "" : "."}`,
     f.verdict.detail && `${f.verdict.detail[0].toUpperCase()}${f.verdict.detail.slice(1)}.`,
     f.rule.example && `Example: ${f.rule.example}.`,
   ]

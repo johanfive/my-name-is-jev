@@ -19,7 +19,8 @@
   "scripts": {
     "typecheck": "tsc",
     "explain": "node bin/nij.ts explain",
-    "check": "node bin/nij.ts check"
+    "check": "node bin/nij.ts check",
+    "version": "node -e \"const f=require('fs'),p='.claude-plugin/plugin.json',m=JSON.parse(f.readFileSync(p));m.version=process.env.npm_package_version;f.writeFileSync(p,JSON.stringify(m,null,2)+'\\n')\" && git add .claude-plugin/plugin.json"
   },
   "dependencies": {
     "@typesafe-ai/sdk": "^0.6.0",

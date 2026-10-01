@@ -16,6 +16,9 @@ registerHooks({
 // Native homes: the plugin's data directory for the cache, the user's Claude directory for a user-level nij.config.ts.
 if (process.env.CLAUDE_PLUGIN_DATA) process.env.NIJ_CACHE_DIR ??= process.env.CLAUDE_PLUGIN_DATA;
 process.env.NIJ_CONFIG_DIR ??= process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), ".claude");
+// The key and backend the user gave the plugin (`/plugin configure`); an explicit NIJ_JEV_* variable still wins.
+if (process.env.CLAUDE_PLUGIN_OPTION_JEV_API_KEY) process.env.NIJ_JEV_API_KEY ??= process.env.CLAUDE_PLUGIN_OPTION_JEV_API_KEY;
+if (process.env.CLAUDE_PLUGIN_OPTION_JEV_BASE_URL) process.env.NIJ_JEV_BASE_URL ??= process.env.CLAUDE_PLUGIN_OPTION_JEV_BASE_URL;
 
 let raw = "";
 for await (const chunk of process.stdin) raw += chunk;
