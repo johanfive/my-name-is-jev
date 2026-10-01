@@ -41,6 +41,7 @@ without the presets.
 
 Install: see [docs/install.md](docs/install.md).
 
-> [!NOTE] Once a name has been through Jev, it has been jev-ed. Hence, my name is jev(ed).
+> [!NOTE]
+> Once a name has been through Jev, it has been jev-ed. Hence, my name is jev(ed).
 
 Status: active development. Interfaces change without notice.
