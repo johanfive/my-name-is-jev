@@ -1,0 +1,8 @@
+{
+  "name": "my-name-is-jev",
+  "description": "Naming-convention enforcement on every name the agent introduces. Shape is deterministic, meaning is Jev.",
+  "version": "0.1.0",
+  "author": { "name": "johanFive" },
+  "license": "MIT",
+  "hooks": "./adapters/claude-code/hooks.json"
+}

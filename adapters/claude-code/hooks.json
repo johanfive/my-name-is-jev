@@ -1,0 +1,17 @@
+{
+  "description": "Check every name introduced by Write, Edit, MultiEdit and Bash against nij.config.ts",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/adapters/claude-code/hook.ts\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

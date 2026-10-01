@@ -1,0 +1,14 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "my-name-is-jev",
+  "description": "Naming-convention enforcement for coding agents. Shape is deterministic, meaning is Jev.",
+  "owner": { "name": "johanFive" },
+  "plugins": [
+    {
+      "name": "my-name-is-jev",
+      "description": "Checks every name the agent introduces against nij.config.ts, or the built-in presets without one.",
+      "source": "./",
+      "category": "development"
+    }
+  ]
+}

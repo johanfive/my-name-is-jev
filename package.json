@@ -1,0 +1,31 @@
+{
+  "name": "my-name-is-jev",
+  "version": "0.1.0",
+  "description": "Naming-convention enforcement for coding agents. Shape is deterministic, meaning is Jev.",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=24"
+  },
+  "bin": {
+    "nij": "./bin/nij.ts"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./checks": "./src/built-in/checks/index.ts",
+    "./judges": "./src/built-in/judges/index.ts",
+    "./presets": "./src/built-in/presets/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc",
+    "explain": "node bin/nij.ts explain",
+    "check": "node bin/nij.ts check"
+  },
+  "dependencies": {
+    "@typesafe-ai/sdk": "^0.6.0",
+    "typescript": "^5.9.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.3"
+  }
+}
