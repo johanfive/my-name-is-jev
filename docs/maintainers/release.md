@@ -31,12 +31,13 @@ The bump can also ride in the PR that ships the change instead of its own PR.
 
 ## What does what
 
-- `npm version` bumps `package.json` and `package-lock.json`; the `version` script in
-  `package.json` copies the number into `.claude-plugin/plugin.json`.
+- `npm version` bumps `package.json` and `package-lock.json`, then runs the `version` script:
+  `scripts/sync-manifest-versions.ts` copies the number into each agent manifest. A new agent's
+  manifest goes in its list.
 - `.npmrc` sets `git-tag-version=false`, so `npm version` neither commits nor tags. A local tag
   would point at a commit that never reaches `main` once the PR is merged.
-- The workflow runs on every push to `main` that touches `package.json`. It fails if
-  `plugin.json` is at a different version, and does nothing if the release already exists, so a
+- The workflow runs on every push to `main` that touches `package.json`. It runs the same
+  script and fails if any manifest changes, and does nothing if the release already exists, so a
   dependency change is harmless.
 
 ## Choosing the bump
@@ -47,7 +48,7 @@ The bump can also ride in the PR that ships the change instead of its own PR.
 
 ## When something goes wrong
 
-- **The workflow failed on the version check**: `plugin.json` was edited by hand or the bump
+- **The workflow failed on the version check**: a manifest was edited by hand or the bump
   skipped `npm version`. Fix the version in a PR; the merge reruns the workflow.
 - **Wrong notes or wrong commit**: delete the release and its tag
   (`gh release delete vX.Y.Z --cleanup-tag`), then rerun the failed or latest run of the

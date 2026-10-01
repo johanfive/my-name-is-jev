@@ -1,7 +1,7 @@
 # Users update when .claude-plugin/plugin.json changes version on main; the GitHub release is
 # the changelog. To release: on a branch, `npm version patch|minor|major` (bumps package.json and
-# plugin.json, no commit or tag, see .npmrc), commit, open a PR, merge. This job then tags vX.Y.Z
-# and publishes the release with notes generated from the merged PRs.
+# the agent manifests, no commit or tag, see .npmrc), commit, open a PR, merge. This job then tags
+# vX.Y.Z and publishes the release with notes generated from the merged PRs.
 name: release
 on:
   push:
@@ -14,9 +14,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - name: Check the agent manifests carry the package.json version
+        run: node scripts/sync-manifest-versions.ts && git diff --exit-code
       - env:
           GH_TOKEN: ${{ github.token }}
         run: |
           v=$(jq -r .version package.json)
-          [ "$v" = "$(jq -r .version .claude-plugin/plugin.json)" ] || { echo "::error::plugin.json is not at $v"; exit 1; }
           gh release view "v$v" > /dev/null 2>&1 || gh release create "v$v" --target "$GITHUB_SHA" --generate-notes
