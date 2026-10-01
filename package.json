@@ -1,6 +1,6 @@
 {
   "name": "my-name-is-jev",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Naming-convention enforcement for coding agents. Shape is deterministic, meaning is Jev.",
   "type": "module",
   "license": "MIT",

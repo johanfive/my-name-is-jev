@@ -1,7 +1,7 @@
 {
   "name": "my-name-is-jev",
   "description": "Naming-convention enforcement on every name the agent introduces. Shape is deterministic, meaning is Jev.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "author": {
     "name": "johanFive"
   },
