@@ -1,0 +1,45 @@
+# Users update when .claude-plugin/plugin.json changes version on main;
+# the GitHub release is the changelog.
+# To release:
+# - on the branch of the PR that changes what the plugin does, `npm version patch|minor|major`
+# (bumps package.json and the agent manifests, no commit or tag, see .npmrc),
+# - commit,
+# - merge the PR.
+# On a pull request this job only checks: the manifests, and that shipped code comes with a bump.
+# On main it then tags vX.Y.Z and publishes the release with notes listing the merged PRs.
+name: release
+on:
+  push:
+    branches: [main]
+    paths: [package.json, .claude-plugin/plugin.json]
+  pull_request:
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 2 # on a pull request HEAD is the merge commit and HEAD^ the tip of main
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: package.json
+      - name: Check the agent manifests carry the package.json version
+        run: node scripts/sync-manifest-versions.ts && git diff --exit-code
+      # Installs come from main, not from the tag: shipped code merged under the old number would
+      # reach new installs while existing installs keep the old code.
+      - name: Check a pull request that changes shipped code bumps the version
+        if: github.event_name == 'pull_request'
+        run: |
+          if ! git diff --quiet HEAD^ HEAD -- src adapters bin .claude-plugin package-lock.json \
+            && [ "$(git show HEAD^:package.json | jq -r .version)" = "$(jq -r .version package.json)" ]; then
+            echo "::error::Shipped code changed without a version bump: run npm version on this branch."
+            exit 1
+          fi
+      - if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v=$(jq -r .version package.json)
+          gh release view "v$v" > /dev/null 2>&1 || gh release create "v$v" --target "$GITHUB_SHA" --generate-notes

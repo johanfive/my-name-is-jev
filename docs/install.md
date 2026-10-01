@@ -27,3 +27,16 @@ variables `NIJ_JEV_API_KEY` and `NIJ_JEV_BASE_URL` work too.
 
 Without a `nij.config.ts` the built-in presets apply at `warn`. To change the rules, write one in the project root,
 or in `~/.claude/` for every project.
+
+## Updates
+
+Claude Code does not update this plugin on its own: `auto-update` is `off` by default for marketplaces Anthropic doesn't
+run.  
+- To turn it `on`:  
+    `/plugin` → **Marketplaces** → `my-name-is-jev` → **Enable auto-update**.
+- To update by hand:  
+    `/plugin` → **Installed** → **Update now**, or from a shell:
+
+```
+claude plugin update my-name-is-jev@my-name-is-jev
+```
