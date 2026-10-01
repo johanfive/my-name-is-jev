@@ -2,5 +2,5 @@ import type { Check } from "../../types.ts";
 
 export const regex =
   (re: RegExp): Check =>
-  (id) =>
-    re.test(id.name) ? { ok: true } : { ok: false, detail: `does not match ${re}` };
+    (id) =>
+      re.test(id.name) ? { ok: true } : { ok: false, detail: `does not match ${re}` };

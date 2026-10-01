@@ -28,29 +28,54 @@ const containsJsx = (n: ts.Node): boolean => {
   return found;
 };
 
-type Fn = ts.FunctionDeclaration | ts.MethodDeclaration | ts.GetAccessorDeclaration | ts.ArrowFunction | ts.FunctionExpression;
+type Fn =
+  | ts.FunctionDeclaration
+  | ts.MethodDeclaration
+  | ts.GetAccessorDeclaration
+  | ts.ArrowFunction
+  | ts.FunctionExpression;
 type Facts = Pick<Identifier, "async" | "returnType" | "type" | "arity">;
 
 const isPromise = (t: ts.TypeNode | undefined): t is ts.TypeReferenceNode =>
   !!t && ts.isTypeReferenceNode(t) && ts.isIdentifier(t.typeName) && t.typeName.text === "Promise";
 
-/** Declared type text, never inferred. `unwrapPromise` takes the value a caller gets after awaiting. */
-const typeText = (sf: ts.SourceFile, t: ts.TypeNode | undefined, unwrapPromise = false): string | undefined => {
+/**
+ * Declared type text, never inferred. `unwrapPromise` takes the value a caller gets after awaiting.
+ */
+const typeText = (
+  sf: ts.SourceFile,
+  t: ts.TypeNode | undefined,
+  unwrapPromise = false,
+): string | undefined => {
   if (!t) return undefined;
   if (unwrapPromise && isPromise(t)) return typeText(sf, t.typeArguments?.[0]);
   return t.getText(sf);
 };
 
 const factsOf = (sf: ts.SourceFile, fn: Fn): Facts => ({
-  async: (ts.canHaveModifiers(fn) && ts.getModifiers(fn)?.some((m) => m.kind === ts.SyntaxKind.AsyncKeyword)) || isPromise(fn.type) ? true : undefined,
+  async:
+    (ts.canHaveModifiers(fn)
+      && ts.getModifiers(fn)?.some((m) => m.kind === ts.SyntaxKind.AsyncKeyword))
+    || isPromise(fn.type)
+      ? true
+      : undefined,
   returnType: typeText(sf, fn.type, true),
   arity: fn.parameters.length,
 });
 
-/** Declared identifiers with their kind and the signature facts that are cheap to read. Usages, imports and `_`-prefixed names are skipped. */
+/**
+ * Declared identifiers with their kind and the signature facts that are cheap to read.
+ * Usages, imports and `_`-prefixed names are skipped.
+ */
 export function fromTypeScript(filePath: string, content: string, isNew = true): Identifier[] {
   const ext = filePath.match(EXT)?.[0] ?? ".ts";
-  const sf = ts.createSourceFile(filePath, content, ts.ScriptTarget.Latest, true, SCRIPT_KIND[ext] ?? ts.ScriptKind.TS);
+  const sf = ts.createSourceFile(
+    filePath,
+    content,
+    ts.ScriptTarget.Latest,
+    true,
+    SCRIPT_KIND[ext] ?? ts.ScriptKind.TS,
+  );
   const out: Identifier[] = [];
 
   const push = (nameNode: ts.Node | undefined, kind: Kind, facts: Facts = {}) => {
@@ -58,8 +83,15 @@ export function fromTypeScript(filePath: string, content: string, isNew = true):
     const name = nameNode.text;
     if (name.startsWith("_")) return;
     const { line } = sf.getLineAndCharacterOfPosition(nameNode.getStart(sf));
-    const id: Identifier = { name, kind, file: filePath, line: line + 1, isNew, segments: tokenize(name) };
-    for (const [k, v] of Object.entries(facts)) if (v !== undefined) (id as any)[k] = v;
+    const id: Identifier = {
+      name,
+      kind,
+      file: filePath,
+      line: line + 1,
+      isNew,
+      segments: tokenize(name),
+    };
+    Object.assign(id, Object.fromEntries(Object.entries(facts).filter(([, v]) => v !== undefined)));
     out.push(id);
   };
 

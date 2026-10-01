@@ -1,4 +1,5 @@
-/* Built-in judges: every export is a factory returning a `Judge`. A user could write any of these from the primitives. */
+// Built-in judges: every export is a factory returning a `Judge`.
+// A user could write any of these from the primitives.
 export { noul } from "./noul.ts";
 export { score } from "./score.ts";
 export { verbFirst } from "./verb-first.ts";

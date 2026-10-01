@@ -16,15 +16,23 @@ export const formatFinding = (f: Finding) =>
 const HEADING: Record<Severity, string> = {
   block: "Naming convention violations. Rename and retry:",
   ask: "Naming convention concerns:",
-  warn: "Naming convention warnings (the write went through; fix these next time you touch the code):",
+  warn:
+    "Naming convention warnings "
+    + "(the write went through; fix these next time you touch the code):",
 };
 
-const RANK: Severity[] = ["block", "ask", "warn"];
+const RANK: Severity[] = [
+  "block",
+  "ask",
+  "warn",
+];
 const lines = (fs: Finding[]) => fs.map((f) => `- ${formatFinding(f)}`).join("\n");
 
 /**
- * Severity resolves rule → config → warn. The strongest severity present decides. Every finding of the tool call is
- * listed, deciding ones first, so one deny or ask covers all of them and the agent's re-emit fixes everything at once.
+ * Each finding's severity is its rule's, else the config default, else warn.
+ * The most restrictive severity among the findings decides: block, then ask, then warn.
+ * Every finding of the tool call is listed, deciding ones first,
+ * so one deny or ask covers all of them and the agent's re-emit fixes everything at once.
  */
 export function report(findings: Finding[], config: ResolvedConfig): Report | null {
   if (!findings.length) return null;
@@ -32,6 +40,7 @@ export function report(findings: Finding[], config: ResolvedConfig): Report | nu
   const decision = RANK.find((s) => findings.some((f) => severityOf(f) === s))!;
   const deciding = findings.filter((f) => severityOf(f) === decision);
   const rest = findings.filter((f) => severityOf(f) !== decision);
-  const text = `${HEADING[decision]}\n${lines(deciding)}${rest.length ? `\nAlso, while you are at it:\n${lines(rest)}` : ""}`;
+  const also = rest.length ? `\nAlso, while you are at it:\n${lines(rest)}` : "";
+  const text = `${HEADING[decision]}\n${lines(deciding)}${also}`;
   return { decision, findings: [...deciding, ...rest], text };
 }

@@ -1,0 +1,5 @@
+{
+  // ESLint is the only formatter for JS and TS: saving runs `eslint --fix`, nothing else does.
+  "editor.codeActionsOnSave": { "source.fixAll.eslint": "explicit" },
+  "[javascript][typescript]": { "editor.formatOnSave": false },
+}

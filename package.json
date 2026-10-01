@@ -20,13 +20,18 @@
     "typecheck": "tsc",
     "explain": "node bin/nij.ts explain",
     "check": "node bin/nij.ts check",
-    "version": "node -e \"const f=require('fs'),p='.claude-plugin/plugin.json',m=JSON.parse(f.readFileSync(p));m.version=process.env.npm_package_version;f.writeFileSync(p,JSON.stringify(m,null,2)+'\\n')\" && git add .claude-plugin/plugin.json"
+    "version": "node -e \"const f=require('fs'),p='.claude-plugin/plugin.json',m=JSON.parse(f.readFileSync(p));m.version=process.env.npm_package_version;f.writeFileSync(p,JSON.stringify(m,null,2)+'\\n')\" && git add .claude-plugin/plugin.json",
+    "lint": "eslint ."
   },
   "dependencies": {
     "@typesafe-ai/sdk": "^0.6.0",
     "typescript": "^5.9.3"
   },
   "devDependencies": {
-    "@types/node": "^26.6.3"
+    "@eslint/js": "^10.0.1",
+    "@stylistic/eslint-plugin": "^5.10.0",
+    "@types/node": "^26.6.3",
+    "eslint": "^10.11.0",
+    "typescript-eslint": "^8.71.0"
   }
 }

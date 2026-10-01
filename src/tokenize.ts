@@ -8,12 +8,14 @@
  *   scratch-e2e               → scratch e2e
  */
 export function tokenize(name: string): string[] {
-  return name
-    .replace(/^[_$]+/, "")
-    .replace(/([a-z\d])([A-Z])/g, "$1 $2") // camelCase boundary
-    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2") // HTMLParser → HTML Parser
-    // digits stay attached: e2e, utf8, oauth2, base64, sha1 are single words
-    .split(/[\s\-_./]+/)
-    .filter(Boolean)
-    .map((s) => s.toLowerCase());
+  return (
+    name
+      .replace(/^[_$]+/, "")
+      .replace(/([a-z\d])([A-Z])/g, "$1 $2") // camelCase boundary
+      .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2") // HTMLParser → HTML Parser
+      // digits stay attached: e2e, utf8, oauth2, base64, sha1 are single words
+      .split(/[\s\-_./]+/)
+      .filter(Boolean)
+      .map((s) => s.toLowerCase())
+  );
 }

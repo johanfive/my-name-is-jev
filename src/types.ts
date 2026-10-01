@@ -26,10 +26,15 @@ export type Identifier = {
   isNew: boolean;
   /** Lowercase words, separator-agnostic. See tokenize.ts. */
   segments: string[];
-  /** Signature facts the parser could read. Present only when declared; also given to Jev as state. */
+  /**
+   * Signature facts the parser could read. Present only when declared; also given to Jev as state.
+   */
   /** Callers await it: the `async` keyword, or a declared `Promise<…>` return type. */
   async?: boolean;
-  /** Declared return type of a callable, verbatim, with one outer `Promise<…>` unwrapped. Never inferred. */
+  /**
+   * Declared return type of a callable, verbatim, with one outer `Promise<…>` unwrapped.
+   * Never inferred.
+   */
   returnType?: string;
   /** Declared type of a variable, property or parameter, verbatim. Never inferred. */
   type?: string;
@@ -37,7 +42,10 @@ export type Identifier = {
   arity?: number;
 };
 
-/** A failing verdict says what is wrong, never what the name should be: we diagnose, the model decides. */
+/**
+ * A failing verdict says what is wrong, never what the name should be:
+ * we diagnose, the model decides.
+ */
 export type Verdict = { ok: true } | { ok: false; detail?: string };
 export type Failure = Extract<Verdict, { ok: false }>;
 
@@ -50,9 +58,15 @@ export type CheckCtx = {
 };
 
 export type JudgeCtx = CheckCtx & {
-  /** One request to Jev. `state` replaces the default. Throws when Jev fails; the pipeline skips the judge. */
+  /**
+   * One request to Jev.
+   * `state` replaces the default.
+   * Throws when Jev fails; the pipeline skips the judge.
+   */
   jev: (req: { questions: Questions; state?: State }) => Promise<Answers>;
-  /** What Jev sees by default: name, kind, segments, file, declared facts. Spread it to add context. */
+  /**
+   * What Jev sees by default: name, kind, segments, file, declared facts. Spread it to add context.
+   */
   state: State;
 };
 
@@ -93,7 +107,10 @@ export type Config = {
   severity?: Severity;
   extractors?: Extractor[];
   jev?: { baseURL?: string; model?: string };
-  /** Jev answers are cached on disk, bounded. `false` disables. Defaults: 20000 entries, 30 days since last use. */
+  /**
+   * Jev answers are cached on disk, bounded.
+   * `false` disables. Defaults: 20000 entries, 30 days since last use.
+   */
   cache?: false | { maxEntries?: number; maxAgeDays?: number };
   /** Also apply the user-level config. Default true. A project sets `false` to opt out of it. */
   global?: boolean;

@@ -7,7 +7,10 @@ export function splitShellWords(command: string): string[] {
   return words.map((w) => w.replace(/^(["'])(.*)\1$/, "$2"));
 }
 
-/** Paths introduced by name-creating commands: mkdir, touch, git checkout -b, git switch -c, cp/mv destinations. */
+/**
+ * Paths introduced by name-creating commands:
+ * mkdir, touch, git checkout -b, git switch -c, cp/mv destinations.
+ */
 export function fromBash(command: string): Identifier[] {
   const out: Identifier[] = [];
   // ponytail: split on separators naively; a `;` inside quotes is rare in agent commands.
@@ -27,9 +30,18 @@ export function fromBash(command: string): Identifier[] {
         if (args.length >= 2) out.push(...fromPath(args[args.length - 1]));
         break;
       case "git": {
-        const i = w.findIndex((x) => (w[1] === "checkout" && x === "-b") || (w[1] === "switch" && x === "-c"));
-        if (i > 0 && w[i + 1])
-          out.push({ name: w[i + 1], kind: "string", file: "<git-branch>", isNew: true, segments: w[i + 1].split(/[\/\-_]+/) });
+        const i = w.findIndex(
+          (x) => (w[1] === "checkout" && x === "-b") || (w[1] === "switch" && x === "-c"),
+        );
+        if (i > 0 && w[i + 1]) {
+          out.push({
+            name: w[i + 1],
+            kind: "string",
+            file: "<git-branch>",
+            isNew: true,
+            segments: w[i + 1].split(/[/\-_]+/),
+          });
+        }
         break;
       }
     }

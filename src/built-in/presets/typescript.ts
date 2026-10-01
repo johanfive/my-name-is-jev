@@ -6,7 +6,14 @@ import type { Rule } from "../../types.ts";
 export const typescript: Rule[] = [
   {
     id: "ts/camel",
-    select: { kind: ["variable", "function", "method", "getter", "parameter", "property"] },
+    select: { kind: [
+      "variable",
+      "function",
+      "method",
+      "getter",
+      "parameter",
+      "property",
+    ] },
     check: casing("camel"),
     message: "Variables, functions, methods, parameters and properties are camelCase.",
     example: "fetchUser, isReady, maxRetryCount",
@@ -20,7 +27,13 @@ export const typescript: Rule[] = [
   },
   {
     id: "ts/pascal",
-    select: { kind: ["class", "type", "interface", "component", "enum-member"] },
+    select: { kind: [
+      "class",
+      "type",
+      "interface",
+      "component",
+      "enum-member",
+    ] },
     check: casing("pascal"),
     message: "Classes, types, interfaces, components and enum members are PascalCase.",
     example: "UserCache, ProfileProps, Role.Admin",
