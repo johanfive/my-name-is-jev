@@ -19,13 +19,13 @@ export const stableToVariable: Rule[] = [
     select: { kind: ["variable", "const", "class", "type", "interface", "property", "file", "dir", "string"] },
     judge: ordered({ scale: SCALE }),
     message: MESSAGE,
-    example: "acmeUserCacheLegacy, invoice-handler-v3, acme-prod-202609282037",
+    example: "stripeInvoiceHandlerDraft, deploy-config-prod, acme-prod-202609282037",
   },
   {
     id: "order/stable-to-variable-fn",
     select: { kind: ["function", "method"] },
     judge: ordered({ scale: ["the action (get, fetch, render, compute)", ...SCALE] }),
     message: MESSAGE,
-    example: "fetchAcmeUserCache, renderInvoiceHandlerLegacy",
+    example: "renderStripeInvoiceDraft, fetchDeployConfigProd",
   },
 ];
