@@ -9,18 +9,10 @@ export const functionsStartWithVerb: Rule[] = [
   {
     id: "fn/verb-first",
     select: { kind: ["function", "method"] },
-    judge: verbFirst({ trustedVerbs: [
-      "get",
-      "set",
-      "is",
-      "has",
-      "to",
-      "from",
-    ] }),
+    judge: verbFirst(),
     message:
-      "A function name is a command: a verb first, then the thing it acts on, "
-      + "with no second reading. Think about what the function actually does, then choose "
-      + "a first word that can only be a verb here and an object that can only be a thing.",
+      "A function name reads best as a command: a verb first, then the thing it acts on, "
+      + "with no second reading. Think about what the function actually does.",
     example: "fetchUser, computeTotal, renderInvoice, parseConfig",
   },
 ];

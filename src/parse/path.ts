@@ -31,8 +31,8 @@ export function relativize(
  * The whole basename is the name:
  * a dot cannot tell an extension (`.test.ts`)
  * from a name part (`com.google.event`, `Dockerfile.theThing`),
- * so shape checks judge each dotted piece on its own and Jev,
- * which sees the full path in its state, is told which words are file extensions.
+ * so shape checks judge each dotted piece on its own
+ * and Jev decides which words are file extensions.
  * A directory is new only if it does not exist on disk yet;
  * the file's newness is the caller's (`isNew`).
  */
