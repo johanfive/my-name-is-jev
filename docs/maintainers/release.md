@@ -7,6 +7,9 @@ as the plugin's version.
 Existing installs only pick up a merge once that version changes.
 
 The GitHub release is the changelog: it does not deliver anything, and nothing is published to npm.
+`package.json` sets `"private": true` so `npm publish` refuses: a published package would break on
+install, because Node does not strip TypeScript types under `node_modules`. `npm link` still puts
+`nij` on your `PATH` for development.
 
 Users still have to update, by hand or with auto-update turned on: see [Updates](../install.md#updates).
 
