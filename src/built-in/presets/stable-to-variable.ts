@@ -1,19 +1,7 @@
 import { ordered } from "../judges/ordered.ts";
 import type { Rule } from "../../types.ts";
 
-const SCALE = [
-  "organisation or product (acme, stripe)",
-  "domain entity (user, invoice, deploy)",
-  "role or component (cache, handler, service, config)",
-  "qualifier or variant (primary, legacy, prod, dev)",
-  "state, time or version (pending, draft, v3, 2026)",
-] as const;
-
-const MESSAGE =
-  "Order the words in a name from most stable to most variable: "
-  + "what it belongs to, then what it is, then how it varies.";
-
-/** Words go from most stable to most variable. For functions the leading verb is its own level. */
+/** Words go from most stable to most variable. */
 export const stableToVariable: Rule[] = [
   {
     id: "order/stable-to-variable",
@@ -21,6 +9,8 @@ export const stableToVariable: Rule[] = [
       kind: [
         "variable",
         "const",
+        "function",
+        "method",
         "class",
         "type",
         "interface",
@@ -30,15 +20,16 @@ export const stableToVariable: Rule[] = [
         "string",
       ],
     },
-    judge: ordered({ scale: SCALE }),
-    message: MESSAGE,
-    example: "stripeInvoiceHandlerDraft, deploy-config-prod, acme-prod-202609282037",
-  },
-  {
-    id: "order/stable-to-variable-fn",
-    select: { kind: ["function", "method"] },
-    judge: ordered({ scale: ["the action (get, fetch, render, compute)", ...SCALE] }),
-    message: MESSAGE,
-    example: "renderStripeInvoiceDraft, fetchDeployConfigProd",
+    judge: ordered(),
+    message:
+      "A name sorts and reads best with its words ordered from most stable to most variable, "
+      + "the way a date goes year, month, day. What counts as stable depends on how things are "
+      + "made here: one company has many services, a service is deployed to a few environments, "
+      + "and every deploy gets a new version, so the company comes first and the version last. "
+      + "Consider whether the words of this name follow that order.",
+    example:
+      "{company}-{service}-{resource}-{environment}-{version} as in "
+      + "acme-billing-bucket-dev-20260301093000, leaving out the parts a name does not have: "
+      + "acme-billing-bucket-dev, acme-billing-dev-20260301093000",
   },
 ];

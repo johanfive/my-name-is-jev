@@ -13,12 +13,16 @@ export const formatFinding = (f: Finding) =>
     .filter(Boolean)
     .join(" ");
 
-const HEADING: Record<Severity, string> = {
+const HEADING = {
   block: "Naming convention violations. Rename and retry:",
   ask: "Naming convention concerns:",
-  warn:
-    "Naming convention warnings "
-    + "(the write went through; fix these next time you touch the code):",
+  /** A failed check is a fact about the name's shape. */
+  warnCheck: "Naming convention warnings (not blocking; fix these next time you touch the code):",
+  /** A judge's verdict is a probability, and the agent knows the code better than Jev does. */
+  warnJudge:
+    "Naming suggestions (not blocking). Each one is a second opinion, not a verdict: "
+    + "weigh it against what you know about the code, then rename, add a word, "
+    + "or keep the name when it follows a convention this codebase already uses:",
 };
 
 const RANK: Severity[] = [
@@ -27,17 +31,28 @@ const RANK: Severity[] = [
   "warn",
 ];
 const lines = (fs: Finding[]) => fs.map((f) => `- ${formatFinding(f)}`).join("\n");
+const section = (heading: string, fs: Finding[]) =>
+  fs.length ? `${heading}\n${lines(fs)}` : "";
 
 /**
  * Each finding's severity is its rule's, else the config default, else warn.
  * The most restrictive severity among the findings decides: block, then ask, then warn.
  * Every finding of the tool call is listed, deciding ones first,
  * so one deny or ask covers all of them and the agent's re-emit fixes everything at once.
+ * When nothing blocks or asks, failed checks are stated firmly and judge verdicts as advice.
  */
 export function report(findings: Finding[], config: ResolvedConfig): Report | null {
   if (!findings.length) return null;
   const severityOf = (f: Finding): Severity => f.rule.severity ?? config.severity;
   const decision = RANK.find((s) => findings.some((f) => severityOf(f) === s))!;
+  if (decision === "warn") {
+    const checked = findings.filter((f) => f.rule.check);
+    const judged = findings.filter((f) => f.rule.judge);
+    const text = [section(HEADING.warnCheck, checked), section(HEADING.warnJudge, judged)]
+      .filter(Boolean)
+      .join("\n");
+    return { decision, findings: [...checked, ...judged], text };
+  }
   const deciding = findings.filter((f) => severityOf(f) === decision);
   const rest = findings.filter((f) => severityOf(f) !== decision);
   const also = rest.length ? `\nAlso, while you are at it:\n${lines(rest)}` : "";
