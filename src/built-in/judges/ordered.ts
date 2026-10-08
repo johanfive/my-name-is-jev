@@ -50,19 +50,22 @@ const EXTENSION_LEVEL =
  * Jev is asked, per word, how likely to change the thing it stands for is.
  * The comparison is done in code: Jev places one word well and compares two words badly.
  * A function's leading verb is left out: it is the action, not part of the thing named.
+ * A map is named `<value>By<key>`: each side of a `by` is ordered on its own,
+ * never against the other.
+ * Two words are enough to be out of order (`totalRevenue`), so `minSegments` defaults to 2.
  * A file name gets one more level, for extensions and tool suffixes:
  * a dot alone cannot tell `the-thing.test.ts` from `com.google.event`, so this is Jev's call.
  * The verdict carries no detail: the rule's message states the convention
  * and the agent, who knows the context, works out what to do with it.
  */
 export const ordered =
-  ({ minSegments = 3, margin = 0.2 } = {}): Judge =>
+  ({ minSegments = 2, margin = 0.2 } = {}): Judge =>
     async (id, ctx) => {
       const isCallable = id.kind === "function" || id.kind === "method";
-      const words = (isCallable ? id.segments.slice(1) : id.segments).filter(
-        (s) => !STOP_WORDS.has(s),
-      );
-      if (words.length < minSegments) return { ok: true };
+      const sides = splitAtBy(isCallable ? id.segments.slice(1) : id.segments);
+      if (sides.every((side) => side.length < minSegments)) return { ok: true };
+      const words = sides.flat();
+      const sideOf = sides.flatMap((side, n) => side.map(() => n));
       const levels = id.kind === "file" ? [...LEVELS, EXTENSION_LEVEL] as const : LEVELS;
       const questions: Record<string, Question> = {};
       words.forEach((s, i) => {
@@ -76,5 +79,22 @@ export const ordered =
         const s = a[`s${i}`];
         return s?.type === "score" ? s.score : 0;
       });
-      return { ok: scores.every((s, i) => i === 0 || s >= scores[i - 1] - margin) };
+      return {
+        ok: scores.every(
+          (s, i) => i === 0 || sideOf[i] !== sideOf[i - 1] || s >= scores[i - 1] - margin,
+        ),
+      };
     };
+
+/**
+ * The words of a name, split into the sides of each `by`, stop words left out.
+ * `urlByEnvironment` reads as a map from environment to url, so its two sides never compare.
+ */
+function splitAtBy(segments: string[]): string[][] {
+  const sides: string[][] = [[]];
+  for (const segment of segments) {
+    if (segment === "by") sides.push([]);
+    else if (!STOP_WORDS.has(segment)) sides.at(-1)!.push(segment);
+  }
+  return sides;
+}
