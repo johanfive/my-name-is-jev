@@ -15,15 +15,19 @@ export const typescript: Rule[] = [
       "property",
     ] },
     check: casing("camel"),
-    message: "Variables, functions, methods, parameters and properties are camelCase.",
-    example: "fetchUser, isReady, maxRetryCount",
+    message:
+      "Variables, functions, methods, parameters and properties are camelCase, "
+      + "unless an outside API or tool expects another form, like its own field names.",
+    example: "fetchUser, isReady, retryCountMax",
   },
   {
     id: "ts/const",
     select: { kind: ["const"] },
     check: any(casing("screaming"), casing("camel")),
-    message: "Constants are SCREAMING_SNAKE for true constants or camelCase for bound values.",
-    example: "MAX_RETRIES, defaultOptions",
+    message:
+      "SCREAMING_SNAKE_CASE is for a fixed value known when the code is written. "
+      + "Every other const binding is camelCase.",
+    example: "API_URL, TIMEOUT_MS, optionsDefault",
   },
   {
     id: "ts/pascal",
@@ -42,7 +46,9 @@ export const typescript: Rule[] = [
     id: "ts/kebab-paths",
     select: { kind: ["file", "dir"] },
     check: casing("kebab"),
-    message: "File and directory names are kebab-case.",
+    message:
+      "File and directory names are kebab-case, "
+      + "unless a well-established convention or a tool expects another form.",
     example: "user-cache.ts, fetch-user.test.ts",
   },
 ];

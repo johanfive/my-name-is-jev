@@ -2,7 +2,7 @@
  * Split an identifier into lowercase words regardless of case style.
  *   userProfileCache          → user profile cache
  *   acme-prod-202609282037    → acme prod 202609282037
- *   MAX_RETRY_COUNT           → max retry count
+ *   RETRY_COUNT_MAX           → retry count max
  *   fetch-user-profile.test   → fetch user profile test
  *   HTMLParser                → html parser
  *   scratch-e2e               → scratch e2e

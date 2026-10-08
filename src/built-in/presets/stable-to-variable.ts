@@ -26,6 +26,8 @@ export const stableToVariable: Rule[] = [
       + "the way a date goes year, month, day. What counts as stable depends on how things are "
       + "made here: one company has many services, a service is deployed to a few environments, "
       + "and every deploy gets a new version, so the company comes first and the version last. "
+      + "Qualifiers and units come after the thing they qualify (revenueTotal, timeoutMs), "
+      + "and a map is named for its value, then By, then its key (urlByEnvironment). "
       + "Consider whether the words of this name follow that order.",
     example:
       "{company}-{service}-{resource}-{environment}-{version} as in "
