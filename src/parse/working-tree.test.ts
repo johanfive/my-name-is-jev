@@ -11,6 +11,12 @@ import { extractFromTreeDiff, snapshotWorkingTree } from "./working-tree.ts";
 // These tests run the real git in a temp directory: what they check is git's answer,
 // and a mocked git would only test the mock.
 
+// A git hook running these tests (pre-commit does) exports GIT_INDEX_FILE and friends,
+// which would point every git call at the outer repository instead of the temp one.
+const envWithoutGit = Object.fromEntries(
+  Object.entries(process.env).filter(([name]) => !name.startsWith("GIT_")),
+);
+
 const runGit = (root: string, args: string[]) =>
   execFileSync("git", [
     "-c",
@@ -26,11 +32,12 @@ const runGit = (root: string, args: string[]) =>
 /**
  * Creates a git repository holding `committed`, removed when the test ends.
  *
- * @param t The test context that removes the repository.
+ * @param t The test context that removes the repository and holds the environment mock.
  * @param committed The content of each committed file, by path.
  * @returns The repository's root.
  */
 function createRepo(t: TestContext, committed: Record<string, string>): string {
+  t.mock.property(process, "env", envWithoutGit);
   const root = mkdtempSync(join(tmpdir(), "nij-test-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   runGit(root, ["init", "--quiet"]);
