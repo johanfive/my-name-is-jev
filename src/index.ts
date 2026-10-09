@@ -6,6 +6,6 @@ export { typescriptExtractor, extractFromTypeScript } from "./parse/typescript.t
 export { extractFromBash } from "./parse/bash.ts";
 export { parseToolCall } from "./parse/index.ts";
 export { runRules } from "./pipeline.ts";
-export { buildReport, formatFinding, severityOf, type Report } from "./report.ts";
+export { buildReport, formatFinding, severityOf, type Outcome, type Report } from "./report.ts";
 export { createJev, createJudgeCtx, createJudgeCtxFor } from "./jev-client.ts";
 export { loadConfig, resolveConfig } from "./config.ts";

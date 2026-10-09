@@ -1,10 +1,19 @@
 import type { Finding, ResolvedConfig, Severity } from "./types.ts";
 
-/** One decision and one text any agent can act on. Adapters map `decision` onto their protocol. */
-export type Report = { decision: Severity; findings: Finding[]; text: string };
+/**
+ * What nij can do about the findings: deny the write, ask the human, warn,
+ * or `fix` when a blocking violation is already on disk and the agent has to rename it.
+ */
+export type Outcome = "deny" | "ask" | "fix" | "warn";
+/**
+ * One decision and one text any agent can act on. Adapters map `decision` onto their protocol.
+ * `summary` is one line for the human, when the agent's text does not reach them.
+ */
+export type Report = { decision: Outcome; findings: Finding[]; text: string; summary?: string };
 
 const HEADING_BY_SECTION = {
-  block: "Naming convention violations. Rename and retry:",
+  deny: "Naming convention violations. Rename and retry:",
+  fix: "Naming convention violations, already on disk. Rename them before moving on:",
   ask: "Naming convention concerns:",
   /** A failed check is a fact about the name's shape. */
   warnCheck: "Naming convention warnings (not blocking; fix these next time you touch the code):",
@@ -16,26 +25,39 @@ const HEADING_BY_SECTION = {
 };
 
 /** Most restrictive first. */
-const SEVERITY_RANKING: Severity[] = [
-  "block",
+const OUTCOME_RANKING: Outcome[] = [
+  "deny",
+  "fix",
   "ask",
   "warn",
 ];
 
 /**
  * Each finding's severity is its rule's, else the config default, else warn.
- * The most restrictive severity among the findings decides: block, then ask, then warn.
+ * What can be done about it depends on whether the write already happened:
+ * a block denies a pending write but can only demand a fix of a landed one,
+ * and an ask has no gate left once the write landed, so it warns and tells the human the names.
+ * The most restrictive outcome among the findings decides.
  * Every finding of the tool call is listed, deciding ones first,
  * so one deny or ask covers all of them and the agent's re-emit fixes everything at once.
- * When nothing blocks or asks, failed checks are stated firmly and judge verdicts as advice.
+ * When nothing more than a warning is left, failed checks are stated firmly
+ * and judge verdicts as advice.
  */
-export function buildReport(findings: Finding[], config: ResolvedConfig): Report | null {
+export function buildReport(
+  findings: Finding[],
+  config: ResolvedConfig,
+  { isWritten = false } = {},
+): Report | null {
   if (!findings.length) return null;
-  const decision = SEVERITY_RANKING.find((severity) =>
-    findings.some((finding) => severityOf(finding, config) === severity),
+  const outcomeOf = (finding: Finding) => toOutcome(severityOf(finding, config), isWritten);
+  const decision = OUTCOME_RANKING.find((outcome) =>
+    findings.some((finding) => outcomeOf(finding) === outcome),
   )!;
-  if (decision === "warn") return buildWarning(findings);
-  return buildDecision(decision, findings, config);
+  if (decision === "warn") {
+    const unasked = findings.filter((finding) => severityOf(finding, config) === "ask");
+    return buildWarning(findings, unasked);
+  }
+  return buildDecision(decision, findings, outcomeOf);
 }
 
 /** One line per finding, written for a model to act on. */
@@ -53,27 +75,45 @@ export function formatFinding({ identifier, rule, verdict }: Finding): string {
 export const severityOf = (finding: Finding, config: ResolvedConfig): Severity =>
   finding.rule.severity ?? config.severity;
 
-/** Failed checks stated firmly, then judge verdicts as advice. */
-function buildWarning(findings: Finding[]): Report {
+/** What a severity can achieve, given whether the write already landed. */
+function toOutcome(severity: Severity, isWritten: boolean): Outcome {
+  if (severity === "block") return isWritten ? "fix" : "deny";
+  if (severity === "ask") return isWritten ? "warn" : "ask";
+  return "warn";
+}
+
+/**
+ * Failed checks stated firmly, then judge verdicts as advice.
+ * The human gets a count, and the names of the `unasked` findings: those an ask-level rule
+ * would have put to them, had the write not already landed.
+ */
+function buildWarning(findings: Finding[], unasked: Finding[]): Report {
   const checked = findings.filter((finding) => finding.rule.check);
   const judged = findings.filter((finding) => finding.rule.judge);
   const checkSection = formatSection(HEADING_BY_SECTION.warnCheck, checked);
   const judgeSection = formatSection(HEADING_BY_SECTION.warnJudge, judged);
   const text = [checkSection, judgeSection].filter(Boolean).join("\n");
-  return { decision: "warn", findings: [...checked, ...judged], text };
+  const noteOnUnasked = unasked.length ? `Landed without asking you: ${formatNames(unasked)}` : "";
+  const summary = [`nij: ${formatCount(findings, "warning")}`, noteOnUnasked]
+    .filter(Boolean)
+    .join(". ");
+  return { decision: "warn", findings: [...checked, ...judged], text, summary };
 }
 
 /** The deciding findings under their heading, then every other finding. */
 function buildDecision(
-  decision: Exclude<Severity, "warn">,
+  decision: Exclude<Outcome, "warn">,
   findings: Finding[],
-  config: ResolvedConfig,
+  outcomeOf: (finding: Finding) => Outcome,
 ): Report {
-  const deciding = findings.filter((finding) => severityOf(finding, config) === decision);
-  const rest = findings.filter((finding) => severityOf(finding, config) !== decision);
+  const deciding = findings.filter((finding) => outcomeOf(finding) === decision);
+  const rest = findings.filter((finding) => outcomeOf(finding) !== decision);
   const also = rest.length ? `\nAlso, while you are at it:\n${formatLines(rest)}` : "";
   const text = `${HEADING_BY_SECTION[decision]}\n${formatLines(deciding)}${also}`;
-  return { decision, findings: [...deciding, ...rest], text };
+  const summary = decision === "fix"
+    ? `nij: ${formatCount(deciding, "violation")} landed; the agent is told to rename.`
+    : undefined;
+  return { decision, findings: [...deciding, ...rest], text, summary };
 }
 
 /** A heading over its findings, or nothing when there are none, so empty sections drop out. */
@@ -83,6 +123,16 @@ const formatSection = (heading: string, findings: Finding[]) =>
 /** The findings as a bulleted list. */
 const formatLines = (findings: Finding[]) =>
   findings.map((finding) => `- ${formatFinding(finding)}`).join("\n");
+
+/** The findings' names with kind and file, on one line, for the human. */
+const formatNames = (findings: Finding[]) =>
+  findings
+    .map(({ identifier }) => `${identifier.name} (${identifier.kind}, ${identifier.file})`)
+    .join(", ");
+
+/** "1 naming warning", "3 naming violations". */
+const formatCount = (findings: Finding[], noun: string) =>
+  `${findings.length} naming ${noun}${findings.length === 1 ? "" : "s"}`;
 
 /** The text ending in a full stop. Rule messages are written by people, with or without one. */
 const endWithFullStop = (text: string) => (/[.!?]$/.test(text) ? text : `${text}.`);

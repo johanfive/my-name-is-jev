@@ -210,6 +210,21 @@ describe("handle", () => {
       assert.match(reason, /^Naming convention violations/);
     });
 
+    test("warns for an ask, and names the unasked to the human", async (t) => {
+      const output = await getHookOutput(t, fakeBash("PostToolUse"), {
+        severity: "ask",
+        treeBefore: "tree-before",
+        identifiersChanged: [fakeBadName],
+      });
+      const { hookSpecificOutput, systemMessage } = output as {
+        hookSpecificOutput: Record<string, unknown>;
+        systemMessage: string;
+      };
+      assert.equal(hookSpecificOutput.permissionDecision, undefined);
+      assert.match(String(hookSpecificOutput.additionalContext), /^Naming convention warnings/);
+      assert.match(systemMessage, /Landed without asking you: bad_name \(variable, src\/cache\.ts\)/);
+    });
+
     test("only adds context after a failed call, even for a block", async (t) => {
       const output = await getHookOutput(t, fakeBash("PostToolUseFailure"), {
         severity: "block",

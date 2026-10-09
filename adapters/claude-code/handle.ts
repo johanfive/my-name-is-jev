@@ -38,7 +38,7 @@ const TOOL_NAMES = new Set([
   "Bash",
 ]);
 
-const PERMISSION_DECISION_BY_SEVERITY = { block: "deny", ask: "ask" } as const;
+const PERMISSION_DECISION_BY_OUTCOME = { deny: "deny", ask: "ask" } as const;
 
 const KEY_MISSING_NOTICE =
   "nij: no Jev key, so only the mechanical checks run. "
@@ -48,10 +48,11 @@ const KEY_MISSING_NOTICE =
 export async function handle(input: HookInput): Promise<HookOutput | null> {
   try {
     if (!TOOL_NAMES.has(input.tool_name)) return null;
-    if (input.hook_event_name === "PostToolUse" || input.hook_event_name === "PostToolUseFailure") {
-      return await handleAfterBash(input, input.hook_event_name);
-    }
-    return await handleBeforeTool(input);
+    const event = input.hook_event_name ?? "PreToolUse";
+    const judgement = event === "PreToolUse"
+      ? await evaluateToolInput(input)
+      : await evaluateTreeDiff(input);
+    return toHookOutput(event, judgement);
   } catch (err) {
     process.stderr.write(`nij: ${(err as Error).stack ?? err}\n`);
     return null;
@@ -62,23 +63,19 @@ export async function handle(input: HookInput): Promise<HookOutput | null> {
  * Judge the names a tool call says it will write, before it runs, so a blocking rule can stop it.
  * Before a Bash call, also snapshot the working tree: what the command writes is only known after.
  */
-async function handleBeforeTool(input: HookInput): Promise<HookOutput | null> {
+async function evaluateToolInput(input: HookInput): Promise<Judgement | null> {
   if (input.tool_name === "Bash") saveTreeBefore(input.tool_use_id);
   const config = await loadConfig();
   const identifiers = parseToolCall(input.tool_name, input.tool_input, config.extractors);
   if (!identifiers.length) return null;
-  const { report, notice } = await evaluateIdentifiers(config, identifiers, input.session_id);
-  return toPreToolUseOutput(report, notice);
+  return evaluateIdentifiers(config, identifiers, input.session_id, { isWritten: false });
 }
 
 /**
  * Judge the names a Bash call wrote, failed or not, by diffing the working tree against its
  * snapshot from before the call. A failed command may still have written files.
  */
-async function handleAfterBash(
-  input: HookInput,
-  event: "PostToolUse" | "PostToolUseFailure",
-): Promise<HookOutput | null> {
+async function evaluateTreeDiff(input: HookInput): Promise<Judgement | null> {
   const treeBefore = takeTreeBefore(input.tool_use_id);
   const treeAfter = treeBefore && snapshotWorkingTree(resolveProjectDir());
   if (!treeBefore || !treeAfter || treeBefore === treeAfter) return null;
@@ -90,8 +87,7 @@ async function handleAfterBash(
     config.extractors,
   );
   if (!identifiers.length) return null;
-  const { report, notice } = await evaluateIdentifiers(config, identifiers, input.session_id);
-  return toPostToolUseOutput(event, report, notice);
+  return evaluateIdentifiers(config, identifiers, input.session_id, { isWritten: true });
 }
 
 /** The report on the identifiers, and the missing-key notice when Jev is not available. */
@@ -99,62 +95,42 @@ async function evaluateIdentifiers(
   config: ResolvedConfig,
   identifiers: Identifier[],
   sessionId: string | undefined,
+  { isWritten }: { isWritten: boolean },
 ): Promise<Judgement> {
   const jev = createJev(config);
   const notice = jev ? undefined : warnKeyMissingOnce(sessionId);
   const findings = await runRules(config.rules, identifiers, createJudgeCtxFor(jev, identifiers));
-  return { report: buildReport(findings, config), notice };
+  return { report: buildReport(findings, config, { isWritten }), notice };
 }
 
 /**
- * The report and the missing-key notice before a tool call. Null when both are empty.
+ * The report and the missing-key notice in Claude Code's hook format. Null when both are empty.
+ * A deny or ask becomes the permission decision; a fix, the block decision that sends the agent
+ * back to rename (after a failed call it can only be context); a warning is context.
  * A warning carries no `permissionDecision`: "allow" would skip the user's own permission
  * prompt for the tool call.
  */
-function toPreToolUseOutput(report: Report | null, notice: string | undefined): HookOutput | null {
-  if (!report) return notice ? { systemMessage: notice } : null;
-  if (report.decision === "warn") {
+function toHookOutput(event: HookEventName, judgement: Judgement | null): HookOutput | null {
+  if (!judgement) return null;
+  const { report, notice } = judgement;
+  const systemMessage = [report?.summary, notice].filter(Boolean).join("\n");
+  const output: HookOutput = systemMessage ? { systemMessage } : {};
+  if (!report) return systemMessage ? output : null;
+  if (report.decision === "deny" || report.decision === "ask") {
     return {
-      hookSpecificOutput: { hookEventName: "PreToolUse", additionalContext: report.text },
-      systemMessage: [countWarnings(report), notice].filter(Boolean).join("\n"),
+      hookSpecificOutput: {
+        hookEventName: event,
+        permissionDecision: PERMISSION_DECISION_BY_OUTCOME[report.decision],
+        permissionDecisionReason: report.text,
+      },
+      ...output,
     };
   }
-  return {
-    hookSpecificOutput: {
-      hookEventName: "PreToolUse",
-      permissionDecision: PERMISSION_DECISION_BY_SEVERITY[report.decision],
-      permissionDecisionReason: report.text,
-    },
-    ...(notice ? { systemMessage: notice } : {}),
-  };
-}
-
-/**
- * The report and the missing-key notice after a Bash call. Null when both are empty.
- * The files are written by then, so nothing can be denied or asked:
- * a block is sent back to the agent as a block decision, everything else as context.
- * A failed call can only carry context.
- */
-function toPostToolUseOutput(
-  event: "PostToolUse" | "PostToolUseFailure",
-  report: Report | null,
-  notice: string | undefined,
-): HookOutput | null {
-  if (!report) return notice ? { systemMessage: notice } : null;
-  const isWarning = report.decision === "warn";
-  const systemMessage = [isWarning && countWarnings(report), notice].filter(Boolean).join("\n");
-  const output: HookOutput = systemMessage ? { systemMessage } : {};
-  if (report.decision === "block" && event === "PostToolUse") {
+  if (report.decision === "fix" && event === "PostToolUse") {
     return { decision: "block", reason: report.text, ...output };
   }
   const hookSpecificOutput = { hookEventName: event, additionalContext: report.text };
   return { hookSpecificOutput, ...output };
-}
-
-/** The one line the human sees for a warning; the details go to the agent. */
-function countWarnings(report: Report): string {
-  const count = report.findings.length;
-  return `nij: ${count} naming warning${count === 1 ? "" : "s"}`;
 }
 
 /**

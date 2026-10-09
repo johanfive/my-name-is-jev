@@ -27,14 +27,20 @@ const fakeFinding = (
  * Builds the report for the findings under a config whose default severity is `severity`.
  *
  * @param findings The findings of one tool call.
- * @param severity The config's default severity.
- * @returns The decision and the rule ids in report order, or null for no report.
+ * @param options The config's default severity, and whether the write already landed.
+ * @returns The decision, the rule ids in report order, the heading over the agent's text
+ *   and the human's summary, or null for no report.
  */
-function getReportOutline(findings: Finding[], severity: Severity = "warn") {
-  const report = buildReport(findings, resolveConfig({ rules: [], severity }));
+function getReportOutline(
+  findings: Finding[],
+  { severity = "warn", isWritten = false }: { severity?: Severity; isWritten?: boolean } = {},
+) {
+  const report = buildReport(findings, resolveConfig({ rules: [], severity }), { isWritten });
   return report && {
     decision: report.decision,
     ruleIds: report.findings.map((finding) => finding.rule.id),
+    heading: report.text.split("\n")[0],
+    summary: report.summary,
   };
 }
 
@@ -51,16 +57,17 @@ describe("buildReport", () => {
       fakeFinding("blocked", { severity: "block" }),
     ];
     const outline = getReportOutline(findings);
-    assert.deepEqual(outline, { decision: "block", ruleIds: [
+    assert.equal(outline?.decision, "deny");
+    assert.deepEqual(outline?.ruleIds, [
       "blocked",
       "warned",
       "asked",
-    ] });
+    ]);
   });
 
   test("falls back to the config's severity for a rule without one", () => {
-    const outline = getReportOutline([fakeFinding("plain")], "ask");
-    assert.deepEqual(outline, { decision: "ask", ruleIds: ["plain"] });
+    const outline = getReportOutline([fakeFinding("plain")], { severity: "ask" });
+    assert.equal(outline?.decision, "ask");
   });
 
   test("lists the rest under a heading of their own when something blocks", () => {
@@ -77,6 +84,34 @@ describe("buildReport", () => {
     assert.deepEqual(report?.findings.map((finding) => finding.rule.id), ["checked", "judged"]);
     assert.match(String(headings?.[0]), /^Naming convention warnings/);
     assert.match(String(headings?.[1]), /^Naming suggestions/);
+  });
+
+  test("counts the warnings for the human", () => {
+    const outline = getReportOutline([fakeFinding("first"), fakeFinding("second")]);
+    assert.equal(outline?.summary, "nij: 2 naming warnings");
+  });
+
+  describe("once the write landed", () => {
+    test("turns a block into a fix: the agent renames, the human is told", () => {
+      const findings = [fakeFinding("blocked", { severity: "block" }), fakeFinding("warned")];
+      const outline = getReportOutline(findings, { isWritten: true });
+      assert.deepEqual(outline, {
+        decision: "fix",
+        ruleIds: ["blocked", "warned"],
+        heading: "Naming convention violations, already on disk. Rename them before moving on:",
+        summary: "nij: 1 naming violation landed; the agent is told to rename.",
+      });
+    });
+
+    test("turns an ask into a warning that names the unasked to the human", () => {
+      const findings = [fakeFinding("asked", { severity: "ask" }), fakeFinding("warned")];
+      const outline = getReportOutline(findings, { isWritten: true });
+      assert.equal(outline?.decision, "warn");
+      assert.equal(
+        outline?.summary,
+        "nij: 2 naming warnings. Landed without asking you: userCache (variable, src/fake.ts)",
+      );
+    });
   });
 });
 
