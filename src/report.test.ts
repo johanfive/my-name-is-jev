@@ -92,11 +92,11 @@ describe("buildReport", () => {
   });
 
   describe("once the write landed", () => {
-    test("turns a block into a required fix: the agent renames, the human is told", () => {
+    test("turns a block into a demand: the agent renames, the human is told", () => {
       const findings = [fakeFinding("blocked", { severity: "block" }), fakeFinding("warned")];
       const outline = getReportOutline(findings, { isWritten: true });
       assert.deepEqual(outline, {
-        decision: "requireFix",
+        decision: "demand",
         ruleIds: ["blocked", "warned"],
         heading: "Naming convention violations, already on disk. Rename them before moving on:",
         summary:

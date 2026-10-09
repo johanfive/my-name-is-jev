@@ -2,9 +2,9 @@ import type { Finding, ResolvedConfig, Severity } from "./types.ts";
 
 /**
  * What nij can do about the findings: deny the write, ask the human, warn,
- * or require a fix when a blocking violation is already on disk and the agent has to rename it.
+ * or demand a rename when a blocking violation is already on disk.
  */
-export type Outcome = "deny" | "ask" | "requireFix" | "warn";
+export type Outcome = "deny" | "ask" | "demand" | "warn";
 /**
  * One decision and one text any agent can act on. Adapters map `decision` onto their protocol.
  * `summary` is one line for the human, when the agent's text does not reach them.
@@ -13,7 +13,7 @@ export type Report = { decision: Outcome; findings: Finding[]; text: string; sum
 
 const HEADING_BY_SECTION = {
   deny: "Naming convention violations. Rename and retry:",
-  requireFix: "Naming convention violations, already on disk. Rename them before moving on:",
+  demand: "Naming convention violations, already on disk. Rename them before moving on:",
   ask: "Naming convention concerns:",
   /** A failed check is a fact about the name's shape. */
   warnCheck: "Naming convention warnings (not blocking; fix these next time you touch the code):",
@@ -33,7 +33,7 @@ const WRITTEN_UNSEEN = "written in a way nij can only check after the fact";
 /** Most restrictive first. */
 const OUTCOME_RANKING: Outcome[] = [
   "deny",
-  "requireFix",
+  "demand",
   "ask",
   "warn",
 ];
@@ -83,7 +83,7 @@ export const severityOf = (finding: Finding, config: ResolvedConfig): Severity =
 
 /** What a severity can achieve, given whether the write already landed. */
 function toOutcome(severity: Severity, isWritten: boolean): Outcome {
-  if (severity === "block") return isWritten ? "requireFix" : "deny";
+  if (severity === "block") return isWritten ? "demand" : "deny";
   if (severity === "ask") return isWritten ? "warn" : "ask";
   return "warn";
 }
@@ -119,7 +119,7 @@ function buildDecision(
   const rest = findings.filter((finding) => outcomeOf(finding) !== decision);
   const also = rest.length ? `\nAlso, while you are at it:\n${formatLines(rest)}` : "";
   const text = `${HEADING_BY_SECTION[decision]}\n${formatLines(deciding)}${also}`;
-  const summary = decision === "requireFix"
+  const summary = decision === "demand"
     ? `nij: ${formatCount(deciding, "violation")} got through, ${WRITTEN_UNSEEN}. `
     + "The agent is told to rename."
     : undefined;
