@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
+import { isAbsolute } from "node:path";
 import type { Extractor, Identifier } from "../types.ts";
 import { extractFromBash } from "./bash.ts";
 import { relativize } from "./path.ts";
@@ -39,12 +40,14 @@ export function parseToolCall(
 
 /**
  * Reconstruct the file a Write/Edit/MultiEdit call would produce, and the file before it.
- * `null` for tools that don't touch a file.
+ * `null` for tools that don't touch a file, and for files outside the project:
+ * scratch files and other repos are not the project's names to judge.
  */
 function reconstructChange(toolName: string, input: ToolInput): Change | null {
   const absolutePath = input.file_path;
   if (!absolutePath) return null;
   const path = relativize(absolutePath);
+  if (isAbsolute(path)) return null;
   const before = existsSync(absolutePath) ? readFileSync(absolutePath, "utf8") : null;
   switch (toolName) {
     case "Write":

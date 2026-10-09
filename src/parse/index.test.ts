@@ -91,4 +91,12 @@ describe("parseToolCall", () => {
     const identifiers = getIdentifiers(t, "Read", { file_path: "/project/src/cache.ts" });
     assert.deepEqual(identifiers, []);
   });
+
+  test("finds nothing in a file outside the project", (t) => {
+    const identifiers = getIdentifiers(t, "Write", {
+      file_path: "/tmp/scratch/Bad_Name.ts",
+      content: "const bad_name = 1;",
+    });
+    assert.deepEqual(identifiers, []);
+  });
 });
