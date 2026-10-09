@@ -24,6 +24,12 @@ const HEADING_BY_SECTION = {
     + "or keep the name when it follows a convention this codebase already uses:",
 };
 
+/**
+ * Why a block or ask did not stop the write, for a human who set that severity and
+ * sees the name on disk anyway.
+ */
+const WRITTEN_UNSEEN = "written in a way nij can only check after the fact";
+
 /** Most restrictive first. */
 const OUTCOME_RANKING: Outcome[] = [
   "deny",
@@ -93,7 +99,10 @@ function buildWarning(findings: Finding[], unasked: Finding[]): Report {
   const checkSection = formatSection(HEADING_BY_SECTION.warnCheck, checked);
   const judgeSection = formatSection(HEADING_BY_SECTION.warnJudge, judged);
   const text = [checkSection, judgeSection].filter(Boolean).join("\n");
-  const noteOnUnasked = unasked.length ? `Landed without asking you: ${formatNames(unasked)}` : "";
+  const itWas = unasked.length === 1 ? "it was" : "they were";
+  const noteOnUnasked = unasked.length
+    ? `${formatNames(unasked)} would have asked you first, but ${itWas} ${WRITTEN_UNSEEN}`
+    : "";
   const summary = [`nij: ${formatCount(findings, "warning")}`, noteOnUnasked]
     .filter(Boolean)
     .join(". ");
@@ -111,7 +120,8 @@ function buildDecision(
   const also = rest.length ? `\nAlso, while you are at it:\n${formatLines(rest)}` : "";
   const text = `${HEADING_BY_SECTION[decision]}\n${formatLines(deciding)}${also}`;
   const summary = decision === "fix"
-    ? `nij: ${formatCount(deciding, "violation")} landed; the agent is told to rename.`
+    ? `nij: ${formatCount(deciding, "violation")} got through, ${WRITTEN_UNSEEN}. `
+    + "The agent is told to rename."
     : undefined;
   return { decision, findings: [...deciding, ...rest], text, summary };
 }
@@ -124,11 +134,12 @@ const formatSection = (heading: string, findings: Finding[]) =>
 const formatLines = (findings: Finding[]) =>
   findings.map((finding) => `- ${formatFinding(finding)}`).join("\n");
 
-/** The findings' names with kind and file, on one line, for the human. */
-const formatNames = (findings: Finding[]) =>
-  findings
-    .map(({ identifier }) => `${identifier.name} (${identifier.kind}, ${identifier.file})`)
-    .join(", ");
+/** The findings' names as a list in a sentence: "a", "a and b", "a, b and c". */
+function formatNames(findings: Finding[]): string {
+  const names = findings.map(({ identifier }) => identifier.name);
+  if (names.length === 1) return names[0];
+  return `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
+}
 
 /** "1 naming warning", "3 naming violations". */
 const formatCount = (findings: Finding[], noun: string) =>

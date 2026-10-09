@@ -222,7 +222,7 @@ describe("handle", () => {
       };
       assert.equal(hookSpecificOutput.permissionDecision, undefined);
       assert.match(String(hookSpecificOutput.additionalContext), /^Naming convention warnings/);
-      assert.match(systemMessage, /Landed without asking you: bad_name \(variable, src\/cache\.ts\)/);
+      assert.match(systemMessage, /bad_name would have asked you first/);
     });
 
     test("only adds context after a failed call, even for a block", async (t) => {

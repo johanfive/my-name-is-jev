@@ -99,7 +99,9 @@ describe("buildReport", () => {
         decision: "fix",
         ruleIds: ["blocked", "warned"],
         heading: "Naming convention violations, already on disk. Rename them before moving on:",
-        summary: "nij: 1 naming violation landed; the agent is told to rename.",
+        summary:
+          "nij: 1 naming violation got through, written in a way nij can only check after the "
+          + "fact. The agent is told to rename.",
       });
     });
 
@@ -109,7 +111,23 @@ describe("buildReport", () => {
       assert.equal(outline?.decision, "warn");
       assert.equal(
         outline?.summary,
-        "nij: 2 naming warnings. Landed without asking you: userCache (variable, src/fake.ts)",
+        "nij: 2 naming warnings. userCache would have asked you first, but it was written in a "
+        + "way nij can only check after the fact",
+      );
+    });
+
+    test("lists several unasked names as a sentence", () => {
+      const findings = [
+        fakeFinding("first", { severity: "ask" }),
+        fakeFinding("second", { severity: "ask" }),
+        fakeFinding("third", { severity: "ask" }),
+      ];
+      findings[1].identifier = { ...fakeIdentifier, name: "userStore" };
+      findings[2].identifier = { ...fakeIdentifier, name: "userIndex" };
+      const outline = getReportOutline(findings, { isWritten: true });
+      assert.match(
+        String(outline?.summary),
+        /userCache, userStore and userIndex would have asked you first, but they were written/,
       );
     });
   });
