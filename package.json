@@ -25,7 +25,7 @@
     "lint": "eslint .",
     "verify": "npm run lint && npm run typecheck && npm test",
     "prepare": "git config core.hooksPath .githooks || exit 0",
-    "test": "node --test --experimental-test-module-mocks --test-timeout=10000"
+    "test": "node --test --experimental-test-module-mocks --disable-warning=ExperimentalWarning --test-timeout=10000"
   },
   "dependencies": {
     "@typesafe-ai/sdk": "^0.6.0",
