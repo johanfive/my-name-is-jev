@@ -22,7 +22,9 @@
     "explain": "node bin/nij.ts explain",
     "check": "node bin/nij.ts check",
     "version": "node scripts/sync-manifest-versions.ts",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "verify": "npm run lint && npm run typecheck",
+    "prepare": "git config core.hooksPath .githooks || exit 0"
   },
   "dependencies": {
     "@typesafe-ai/sdk": "^0.6.0",
