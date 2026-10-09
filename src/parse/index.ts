@@ -1,9 +1,14 @@
 import { existsSync, readFileSync } from "node:fs";
+import { isAbsolute } from "node:path";
 import type { Extractor, Identifier } from "../types.ts";
 import { extractFromBash } from "./bash.ts";
 import { relativize } from "./path.ts";
 
-type Change = { path: string; before: string | null; after: string };
+/**
+ * One file before and after a change. `before` is null when the file did not exist;
+ * `isFileNew` says whether its name is new, which a rename makes true while keeping the content.
+ */
+export type Change = { path: string; before: string | null; after: string; isFileNew: boolean };
 type Edit = { old_string: string; new_string: string; replace_all?: boolean };
 /**
  * The fields of a Write, Edit, MultiEdit or Bash call that matter here;
@@ -28,7 +33,14 @@ export function parseToolCall(
   const toolInput = (input ?? {}) as ToolInput;
   if (toolName === "Bash") return extractFromBash(String(toolInput.command ?? ""));
   const change = reconstructChange(toolName, toolInput);
-  if (!change) return [];
+  return change ? extractFromChange(change, extractors) : [];
+}
+
+/**
+ * The identifiers of the file after the change, `isNew` when the change introduced them.
+ * Shared by the tool calls that say what they write and the working-tree diffs that do not.
+ */
+export function extractFromChange(change: Change, extractors: Extractor[]): Identifier[] {
   const extract = (content: string | null) => extractAll(extractors, change.path, content);
   const previousKeys = new Set(extract(change.before).map(toIdentifierKey));
   return extract(change.after).map((id) => ({
@@ -39,33 +51,38 @@ export function parseToolCall(
 
 /**
  * Reconstruct the file a Write/Edit/MultiEdit call would produce, and the file before it.
- * `null` for tools that don't touch a file.
+ * `null` for tools that don't touch a file, and for files outside the project:
+ * scratch files and other repos are not the project's names to judge.
  */
 function reconstructChange(toolName: string, input: ToolInput): Change | null {
   const absolutePath = input.file_path;
   if (!absolutePath) return null;
   const path = relativize(absolutePath);
+  if (isAbsolute(path)) return null;
   const before = existsSync(absolutePath) ? readFileSync(absolutePath, "utf8") : null;
+  const isFileNew = before === null;
   switch (toolName) {
     case "Write":
-      return { path, before, after: String(input.content ?? "") };
+      return { path, before, after: String(input.content ?? ""), isFileNew };
     case "Edit":
-      return { path, before, after: applyEdit(before ?? "", input as Edit) };
-    case "MultiEdit":
-      return { path, before, after: (input.edits ?? []).reduce(applyEdit, before ?? "") };
+      return { path, before, after: applyEdit(before ?? "", input as Edit), isFileNew };
+    case "MultiEdit": {
+      const after = (input.edits ?? []).reduce(applyEdit, before ?? "");
+      return { path, before, after, isFileNew };
+    }
     default:
       return null;
   }
 }
 
 /**
- * Whether this tool call introduces the identifier:
- * a file when it did not exist,
+ * Whether the change introduces the identifier:
+ * a file when its name is new,
  * a directory when it does not exist on disk (the path extractor already knows),
  * anything else when its kind and name are not in the previous content.
  */
 function isIntroduced(id: Identifier, change: Change, previousKeys: Set<string>): boolean {
-  if (id.kind === "file") return change.before === null;
+  if (id.kind === "file") return change.isFileNew;
   if (id.kind === "dir") return id.isNew;
   return !previousKeys.has(toIdentifierKey(id));
 }

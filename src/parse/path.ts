@@ -66,5 +66,6 @@ function extractDirs(dirPath: string, filePath: string, root: string): Identifie
 /** Each directory on the path, with the path up to it: that is what to look for on disk. */
 function listDirPrefixes(dirPath: string) {
   const dirs = dirPath.split(sep);
-  return dirs.map((dir, i) => ({ dir, prefix: join(...dirs.slice(0, i + 1)) }));
+  // A plain join, not path.join: path.join drops the leading separator of an absolute path.
+  return dirs.map((dir, i) => ({ dir, prefix: dirs.slice(0, i + 1).join(sep) }));
 }

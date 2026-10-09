@@ -1,41 +1,25 @@
 import type { Identifier } from "../types.ts";
-import { extractFromPath } from "./path.ts";
 
 // ponytail: split on separators naively; a `;` inside quotes is rare in agent commands.
 const COMMAND_SEPARATOR = /\s*(?:&&|\|\||;|\|)\s*/;
 const BRANCH_FLAG_BY_GIT_SUBCOMMAND: Record<string, string> = { checkout: "-b", switch: "-c" };
 
 /**
- * Paths introduced by name-creating commands:
- * mkdir, touch, git checkout -b, git switch -c, cp/mv destinations.
- * Agents name things in shell commands too, not only in the files they write.
+ * The branches a command creates with `git checkout -b` or `git switch -c`.
+ * Files a command writes are found after it runs, by diffing the working tree;
+ * a branch name leaves no file behind, so it is read from the command itself.
  */
 export function extractFromBash(command: string): Identifier[] {
   return command
     .split(COMMAND_SEPARATOR)
-    .flatMap((part) => extractFromShellWords(splitShellWords(part)));
+    .flatMap((part) => extractFromGitBranch(splitShellWords(part)));
 }
 
-/** The identifiers one simple command introduces. Each program takes its names its own way. */
-function extractFromShellWords([program, ...args]: string[]): Identifier[] {
-  const operands = args.filter((arg) => !arg.startsWith("-"));
-  switch (program) {
-    case "mkdir":
-      return operands.flatMap((path) => extractFromPath(path, { isDir: true }));
-    case "touch":
-      return operands.flatMap((path) => extractFromPath(path));
-    case "cp":
-    case "mv":
-      return operands.length >= 2 ? extractFromPath(operands.at(-1)!) : [];
-    case "git":
-      return extractFromGitBranch(args);
-    default:
-      return [];
-  }
-}
-
-/** The branch a `git checkout -b` or `git switch -c` creates. A branch name is a name too. */
-function extractFromGitBranch([subcommand, ...args]: string[]): Identifier[] {
+/** The branch one simple command creates, if it is a `git checkout -b` or `git switch -c`. */
+function extractFromGitBranch(words: string[]): Identifier[] {
+  const [program, subcommand] = words;
+  const args = words.slice(2);
+  if (program !== "git") return [];
   const flagIndex = args.indexOf(BRANCH_FLAG_BY_GIT_SUBCOMMAND[subcommand]);
   const branch = flagIndex === -1 ? undefined : args[flagIndex + 1];
   if (!branch) return [];
@@ -50,10 +34,7 @@ function extractFromGitBranch([subcommand, ...args]: string[]): Identifier[] {
   ];
 }
 
-/**
- * Split a command line on whitespace, honouring single and double quotes. No expansion.
- * Enough to find the operands of the few commands that create names.
- */
+/** Split a command line on whitespace, honouring single and double quotes. No expansion. */
 function splitShellWords(command: string): string[] {
   const words = command.match(/"[^"]*"|'[^']*'|\S+/g) ?? [];
   return words.map((word) => word.replace(/^(["'])(.*)\1$/, "$2"));

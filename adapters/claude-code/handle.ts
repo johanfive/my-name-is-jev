@@ -1,22 +1,35 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { resolveCacheDir } from "../../src/cache.ts";
 import { loadConfig } from "../../src/config.ts";
 import { createJev, createJudgeCtxFor } from "../../src/jev-client.ts";
 import { parseToolCall } from "../../src/parse/index.ts";
+import { extractFromTreeDiff, snapshotWorkingTree } from "../../src/parse/working-tree.ts";
 import { runRules } from "../../src/pipeline.ts";
+import { resolveProjectDir } from "../../src/project-dir.ts";
 import { buildReport, type Report } from "../../src/report.ts";
+import type { Identifier, ResolvedConfig } from "../../src/types.ts";
 
-export type HookInput = { session_id?: string; tool_name: string; tool_input: unknown };
+type HookEventName = "PreToolUse" | "PostToolUse" | "PostToolUseFailure";
+export type HookInput = {
+  hook_event_name?: HookEventName;
+  session_id?: string;
+  tool_use_id?: string;
+  tool_name: string;
+  tool_input: unknown;
+};
 export type HookOutput = {
   hookSpecificOutput?: {
-    hookEventName: "PreToolUse";
+    hookEventName: HookEventName;
     permissionDecision?: "deny" | "ask";
     permissionDecisionReason?: string;
     additionalContext?: string;
   };
+  decision?: "block";
+  reason?: string;
   systemMessage?: string;
 };
+type Judgement = { report: Report | null; notice: string | undefined };
 
 const TOOL_NAMES = new Set([
   "Write",
@@ -25,7 +38,7 @@ const TOOL_NAMES = new Set([
   "Bash",
 ]);
 
-const PERMISSION_DECISION_BY_SEVERITY = { block: "deny", ask: "ask" } as const;
+const PERMISSION_DECISION_BY_OUTCOME = { deny: "deny", ask: "ask" } as const;
 
 const KEY_MISSING_NOTICE =
   "nij: no Jev key, so only the mechanical checks run. "
@@ -35,14 +48,11 @@ const KEY_MISSING_NOTICE =
 export async function handle(input: HookInput): Promise<HookOutput | null> {
   try {
     if (!TOOL_NAMES.has(input.tool_name)) return null;
-    const config = await loadConfig();
-    const identifiers = parseToolCall(input.tool_name, input.tool_input, config.extractors);
-    if (!identifiers.length) return null;
-
-    const jev = createJev(config);
-    const notice = jev ? undefined : warnKeyMissingOnce(input.session_id);
-    const findings = await runRules(config.rules, identifiers, createJudgeCtxFor(jev, identifiers));
-    return toHookOutput(buildReport(findings, config), notice);
+    const event = input.hook_event_name ?? "PreToolUse";
+    const judgement = event === "PreToolUse"
+      ? await evaluateToolInput(input)
+      : await evaluateTreeDiff(input);
+    return toHookOutput(event, judgement);
   } catch (err) {
     process.stderr.write(`nij: ${(err as Error).stack ?? err}\n`);
     return null;
@@ -50,33 +60,114 @@ export async function handle(input: HookInput): Promise<HookOutput | null> {
 }
 
 /**
+ * Judge the names a tool call says it will write, before it runs, so a blocking rule can stop it.
+ * Before a Bash call, also snapshot the working tree: what the command writes is only known after.
+ */
+async function evaluateToolInput(input: HookInput): Promise<Judgement | null> {
+  if (input.tool_name === "Bash") saveTreeBefore(input.tool_use_id);
+  const config = await loadConfig();
+  const identifiers = parseToolCall(input.tool_name, input.tool_input, config.extractors);
+  if (!identifiers.length) return null;
+  return evaluateIdentifiers(config, identifiers, input.session_id, { isWritten: false });
+}
+
+/**
+ * Judge the names a Bash call wrote, failed or not, by diffing the working tree against its
+ * snapshot from before the call. A failed command may still have written files.
+ */
+async function evaluateTreeDiff(input: HookInput): Promise<Judgement | null> {
+  const treeBefore = takeTreeBefore(input.tool_use_id);
+  const treeAfter = treeBefore && snapshotWorkingTree(resolveProjectDir());
+  if (!treeBefore || !treeAfter || treeBefore === treeAfter) return null;
+  const config = await loadConfig();
+  const identifiers = extractFromTreeDiff(
+    resolveProjectDir(),
+    treeBefore,
+    treeAfter,
+    config.extractors,
+  );
+  if (!identifiers.length) return null;
+  return evaluateIdentifiers(config, identifiers, input.session_id, { isWritten: true });
+}
+
+/** The report on the identifiers, and the missing-key notice when Jev is not available. */
+async function evaluateIdentifiers(
+  config: ResolvedConfig,
+  identifiers: Identifier[],
+  sessionId: string | undefined,
+  { isWritten }: { isWritten: boolean },
+): Promise<Judgement> {
+  const jev = createJev(config);
+  const notice = jev ? undefined : warnKeyMissingOnce(sessionId);
+  const findings = await runRules(config.rules, identifiers, createJudgeCtxFor(jev, identifiers));
+  return { report: buildReport(findings, config, { isWritten }), notice };
+}
+
+/**
  * The report and the missing-key notice in Claude Code's hook format. Null when both are empty.
+ * A deny or ask becomes the permission decision; a demand, the block decision that sends the
+ * agent back to rename (after a failed call it can only be context); a warning is context.
  * A warning carries no `permissionDecision`: "allow" would skip the user's own permission
  * prompt for the tool call.
  */
-function toHookOutput(report: Report | null, notice: string | undefined): HookOutput | null {
-  if (!report) return notice ? { systemMessage: notice } : null;
-  if (report.decision === "warn") {
+function toHookOutput(event: HookEventName, judgement: Judgement | null): HookOutput | null {
+  if (!judgement) return null;
+  const { report, notice } = judgement;
+  const systemMessage = [report?.summary, notice].filter(Boolean).join("\n");
+  const output: HookOutput = systemMessage ? { systemMessage } : {};
+  if (!report) return systemMessage ? output : null;
+  if (report.decision === "deny" || report.decision === "ask") {
     return {
-      hookSpecificOutput: { hookEventName: "PreToolUse", additionalContext: report.text },
-      systemMessage: [countWarnings(report), notice].filter(Boolean).join("\n"),
+      hookSpecificOutput: {
+        hookEventName: event,
+        permissionDecision: PERMISSION_DECISION_BY_OUTCOME[report.decision],
+        permissionDecisionReason: report.text,
+      },
+      ...output,
     };
   }
-  return {
-    hookSpecificOutput: {
-      hookEventName: "PreToolUse",
-      permissionDecision: PERMISSION_DECISION_BY_SEVERITY[report.decision],
-      permissionDecisionReason: report.text,
-    },
-    ...(notice ? { systemMessage: notice } : {}),
-  };
+  if (report.decision === "demand" && event === "PostToolUse") {
+    return { decision: "block", reason: report.text, ...output };
+  }
+  const hookSpecificOutput = { hookEventName: event, additionalContext: report.text };
+  return { hookSpecificOutput, ...output };
 }
 
-/** The one line the human sees for a warning; the details go to the agent. */
-function countWarnings(report: Report): string {
-  const count = report.findings.length;
-  return `nij: ${count} naming warning${count === 1 ? "" : "s"}`;
+/**
+ * Remember the working tree before a Bash call, under the call's id, for the hook after the call.
+ * Failing to remember only means the call goes unchecked.
+ */
+// ponytail: a call that never completes (denied, interrupted) leaves its small file behind;
+// prune old files here if the directory ever grows.
+function saveTreeBefore(toolUseId: string | undefined) {
+  if (!toolUseId) return;
+  try {
+    const tree = snapshotWorkingTree(resolveProjectDir());
+    if (!tree) return;
+    const file = resolveTreeFile(toolUseId);
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, tree);
+  } catch {
+    /* unwritable cache dir: this call goes unchecked */
+  }
 }
+
+/** The tree saved before the Bash call, forgotten as it is read. Null when none was saved. */
+function takeTreeBefore(toolUseId: string | undefined): string | null {
+  if (!toolUseId) return null;
+  try {
+    const file = resolveTreeFile(toolUseId);
+    const tree = readFileSync(file, "utf8");
+    rmSync(file, { force: true });
+    return tree;
+  } catch {
+    return null;
+  }
+}
+
+/** Where the tree before a call is kept. The id is made safe to use as a file name. */
+const resolveTreeFile = (toolUseId: string) =>
+  join(resolveCacheDir(), "trees-before", toolUseId.replace(/[^\w-]/g, "_"));
 
 /**
  * The missing-key notice, once per session, for the human (ADR 0006).
