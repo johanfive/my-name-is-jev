@@ -1,0 +1,3 @@
+#!/bin/sh
+# Lint and typecheck before every commit; CI runs the same command.
+exec npm run --silent verify

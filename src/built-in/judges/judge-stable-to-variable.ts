@@ -1,6 +1,6 @@
-import type { Question } from "@typesafe-ai/sdk";
+import type { Question, ScoreCriteria } from "@typesafe-ai/sdk";
 import { question } from "../../question.ts";
-import type { Judge } from "../../types.ts";
+import type { Identifier, Judge } from "../../types.ts";
 
 /** Function words carry no stability of their own; they are neither asked about nor compared. */
 const STOP_WORDS = new Set([
@@ -44,47 +44,43 @@ const EXTENSION_LEVEL =
   "not part of the name: a file extension or tool suffix (js, ts, json, test, spec, d)";
 
 /**
- * Words in a name go from most stable to most variable:
+ * A judge that words in a name go from most stable to most variable:
  * the owner, then the thing, then which copy of it, then what changes every time
  * (`acme-billing-dev-20260301093000`).
  * Jev is asked, per word, how likely to change the thing it stands for is.
  * The comparison is done in code: Jev places one word well and compares two words badly.
- * A function's leading verb is left out: it is the action, not part of the thing named.
  * A map is named `<value>By<key>`: each side of a `by` is ordered on its own,
  * never against the other.
- * Two words are enough to be out of order (`totalRevenue`), so `minSegments` defaults to 2.
+ * Two words are enough to be out of order (`totalRevenue`).
  * A file name gets one more level, for extensions and tool suffixes:
  * a dot alone cannot tell `the-thing.test.ts` from `com.google.event`, so this is Jev's call.
  * The verdict carries no detail: the rule's message states the convention
  * and the agent, who knows the context, works out what to do with it.
  */
-export const ordered =
-  ({ minSegments = 2, margin = 0.2 } = {}): Judge =>
-    async (id, ctx) => {
-      const isCallable = id.kind === "function" || id.kind === "method";
-      const sides = splitAtBy(isCallable ? id.segments.slice(1) : id.segments);
-      if (sides.every((side) => side.length < minSegments)) return { ok: true };
-      const words = sides.flat();
-      const sideOf = sides.flatMap((side, n) => side.map(() => n));
-      const levels = id.kind === "file" ? [...LEVELS, EXTENSION_LEVEL] as const : LEVELS;
-      const questions: Record<string, Question> = {};
-      words.forEach((s, i) => {
-        questions[`s${i}`] = question.score(
-          `In the name "${id.name}", how likely to change is what "${s}" stands for?`,
-          levels,
-        );
-      });
-      const a = await ctx.jev({ questions });
-      const scores = words.map((_, i) => {
-        const s = a[`s${i}`];
-        return s?.type === "score" ? s.score : 0;
-      });
-      return {
-        ok: scores.every(
-          (s, i) => i === 0 || sideOf[i] !== sideOf[i - 1] || s >= scores[i - 1] - margin,
-        ),
-      };
-    };
+export function judgeStableToVariable({ segmentsMin = 2, margin = 0.2 } = {}): Judge {
+  return async (id, ctx) => {
+    const sides = listSidesToPlace(id);
+    if (sides.every((side) => side.length < segmentsMin)) return { ok: true };
+    const words = sides.flat();
+    const sideIndexes = sides.flatMap((side, sideIndex) => side.map(() => sideIndex));
+    const levels = id.kind === "file" ? [...LEVELS, EXTENSION_LEVEL] as const : LEVELS;
+    const answers = await ctx.jev({ questions: askLevels(id.name, words, levels) });
+    const scores = words.map((_, i) => {
+      const answer = answers[`s${i}`];
+      return answer?.type === "score" ? answer.score : 0;
+    });
+    return { ok: isOrdered(scores, sideIndexes, margin) };
+  };
+}
+
+/**
+ * The words whose level matters, split into the sides of each `by`.
+ * A function's leading verb is left out: it is the action, not part of the thing named.
+ */
+function listSidesToPlace(id: Identifier): string[][] {
+  const isCallable = id.kind === "function" || id.kind === "method";
+  return splitAtBy(isCallable ? id.segments.slice(1) : id.segments);
+}
 
 /**
  * The words of a name, split into the sides of each `by`, stop words left out.
@@ -97,4 +93,25 @@ function splitAtBy(segments: string[]): string[][] {
     else if (!STOP_WORDS.has(segment)) sides.at(-1)!.push(segment);
   }
   return sides;
+}
+
+/** One question per word, keyed by its position so the answers line up with the words. */
+function askLevels(name: string, words: string[], levels: ScoreCriteria) {
+  return Object.fromEntries(
+    words.map((word, i): [string, Question] => {
+      const ask = `In the name "${name}", how likely to change is what "${word}" stands for?`;
+      return [`s${i}`, question.score(ask, levels)];
+    }),
+  );
+}
+
+/**
+ * Each score at least the previous one on the same side, less `margin`:
+ * Jev's placements are noisy, and the two sides of a `by` never compare.
+ */
+function isOrdered(scores: number[], sideIndexes: number[], margin: number): boolean {
+  return scores.every(
+    (score, i) =>
+      i === 0 || sideIndexes[i] !== sideIndexes[i - 1] || score >= scores[i - 1] - margin,
+  );
 }

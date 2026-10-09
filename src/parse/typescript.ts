@@ -1,9 +1,10 @@
 import ts from "typescript";
-import type { Extractor, Identifier, Kind } from "../types.ts";
 import { tokenize } from "../tokenize.ts";
+import type { Extractor, Identifier, Kind } from "../types.ts";
+import { withoutUndefined } from "../without-undefined.ts";
 
-const EXT = /\.(m|c)?(j|t)sx?$/;
-const SCRIPT_KIND: Record<string, ts.ScriptKind> = {
+const SCRIPT_EXTENSION_PATTERN = /\.(m|c)?(j|t)sx?$/;
+const SCRIPT_KIND_BY_EXTENSION: Record<string, ts.ScriptKind> = {
   ".ts": ts.ScriptKind.TS,
   ".mts": ts.ScriptKind.TS,
   ".cts": ts.ScriptKind.TS,
@@ -14,20 +15,6 @@ const SCRIPT_KIND: Record<string, ts.ScriptKind> = {
   ".jsx": ts.ScriptKind.JSX,
 };
 
-const isFnLike = (n: ts.Node | undefined): n is ts.ArrowFunction | ts.FunctionExpression =>
-  !!n && (ts.isArrowFunction(n) || ts.isFunctionExpression(n));
-
-const containsJsx = (n: ts.Node): boolean => {
-  let found = false;
-  const visit = (c: ts.Node) => {
-    if (found) return;
-    if (ts.isJsxElement(c) || ts.isJsxSelfClosingElement(c) || ts.isJsxFragment(c)) found = true;
-    else ts.forEachChild(c, visit);
-  };
-  visit(n);
-  return found;
-};
-
 type Fn =
   | ts.FunctionDeclaration
   | ts.MethodDeclaration
@@ -35,103 +22,166 @@ type Fn =
   | ts.ArrowFunction
   | ts.FunctionExpression;
 type Facts = Pick<Identifier, "async" | "returnType" | "type" | "arity">;
-
-const isPromise = (t: ts.TypeNode | undefined): t is ts.TypeReferenceNode =>
-  !!t && ts.isTypeReferenceNode(t) && ts.isIdentifier(t.typeName) && t.typeName.text === "Promise";
-
-/**
- * Declared type text, never inferred. `unwrapPromise` takes the value a caller gets after awaiting.
- */
-const typeText = (
-  sf: ts.SourceFile,
-  t: ts.TypeNode | undefined,
-  unwrapPromise = false,
-): string | undefined => {
-  if (!t) return undefined;
-  if (unwrapPromise && isPromise(t)) return typeText(sf, t.typeArguments?.[0]);
-  return t.getText(sf);
-};
-
-const factsOf = (sf: ts.SourceFile, fn: Fn): Facts => ({
-  async:
-    (ts.canHaveModifiers(fn)
-      && ts.getModifiers(fn)?.some((m) => m.kind === ts.SyntaxKind.AsyncKeyword))
-    || isPromise(fn.type)
-      ? true
-      : undefined,
-  returnType: typeText(sf, fn.type, true),
-  arity: fn.parameters.length,
-});
+/** What a node declares, before the name is read and filtered. */
+type Declaration = { nameNode: ts.Node | undefined; kind: Kind; facts?: Facts };
 
 /**
  * Declared identifiers with their kind and the signature facts that are cheap to read.
  * Usages, imports and `_`-prefixed names are skipped.
  */
-export function fromTypeScript(filePath: string, content: string, isNew = true): Identifier[] {
-  const ext = filePath.match(EXT)?.[0] ?? ".ts";
-  const sf = ts.createSourceFile(
+export function extractFromTypeScript(
+  filePath: string,
+  content: string,
+  isNew = true,
+): Identifier[] {
+  const sourceFile = ts.createSourceFile(
     filePath,
     content,
     ts.ScriptTarget.Latest,
     true,
-    SCRIPT_KIND[ext] ?? ts.ScriptKind.TS,
+    toScriptKind(filePath),
   );
-  const out: Identifier[] = [];
-
-  const push = (nameNode: ts.Node | undefined, kind: Kind, facts: Facts = {}) => {
-    if (!nameNode || !ts.isIdentifier(nameNode)) return;
-    const name = nameNode.text;
-    if (name.startsWith("_")) return;
-    const { line } = sf.getLineAndCharacterOfPosition(nameNode.getStart(sf));
-    const id: Identifier = {
-      name,
-      kind,
-      file: filePath,
-      line: line + 1,
-      isNew,
-      segments: tokenize(name),
-    };
-    Object.assign(id, Object.fromEntries(Object.entries(facts).filter(([, v]) => v !== undefined)));
-    out.push(id);
-  };
-
-  const visit = (node: ts.Node) => {
-    if (ts.isVariableDeclaration(node)) {
-      const isConst = !!(ts.getCombinedNodeFlags(node) & ts.NodeFlags.Const);
-      if (isFnLike(node.initializer)) {
-        const fn = node.initializer;
-        const pascal = ts.isIdentifier(node.name) && /^[A-Z]/.test(node.name.text);
-        push(node.name, pascal && containsJsx(fn) ? "component" : "function", factsOf(sf, fn));
-      } else {
-        push(node.name, isConst ? "const" : "variable", { type: typeText(sf, node.type) });
-      }
-    } else if (ts.isFunctionDeclaration(node)) {
-      const pascal = !!node.name && /^[A-Z]/.test(node.name.text);
-      push(node.name, pascal && containsJsx(node) ? "component" : "function", factsOf(sf, node));
-    } else if (ts.isMethodDeclaration(node)) {
-      push(node.name, "method", factsOf(sf, node));
-    } else if (ts.isGetAccessorDeclaration(node)) {
-      push(node.name, "getter", factsOf(sf, node));
-    } else if (ts.isClassDeclaration(node)) {
-      push(node.name, "class");
-    } else if (ts.isTypeAliasDeclaration(node)) {
-      push(node.name, "type");
-    } else if (ts.isInterfaceDeclaration(node)) {
-      push(node.name, "interface");
-    } else if (ts.isEnumMember(node)) {
-      push(node.name, "enum-member");
-    } else if (ts.isPropertySignature(node) || ts.isPropertyDeclaration(node)) {
-      push(node.name, "property", { type: typeText(sf, node.type) });
-    } else if (ts.isParameter(node)) {
-      push(node.name, "parameter", { type: typeText(sf, node.type) });
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(sf);
-  return out;
+  return listNodes(sourceFile).flatMap((node) => {
+    const declaration = describeDeclaration(sourceFile, node);
+    return declaration ? toIdentifiers(sourceFile, filePath, declaration, isNew) : [];
+  });
 }
 
 export const typescriptExtractor: Extractor = {
-  test: (filePath) => EXT.test(filePath),
-  extract: (filePath, content) => fromTypeScript(filePath, content),
+  test: (filePath) => SCRIPT_EXTENSION_PATTERN.test(filePath),
+  extract: (filePath, content) => extractFromTypeScript(filePath, content),
 };
+
+/** The parser's script kind for the file's extension, so JSX and plain JS parse right. */
+function toScriptKind(filePath: string): ts.ScriptKind {
+  const extension = filePath.match(SCRIPT_EXTENSION_PATTERN)?.[0] ?? ".ts";
+  return SCRIPT_KIND_BY_EXTENSION[extension] ?? ts.ScriptKind.TS;
+}
+
+/** The node and every node under it, parents first. Declarations nest at any depth. */
+function listNodes(node: ts.Node): ts.Node[] {
+  const children: ts.Node[] = [];
+  ts.forEachChild(node, (child) => {
+    children.push(child);
+  });
+  return [node, ...children.flatMap(listNodes)];
+}
+
+/** What the node declares, or null when it declares nothing nij checks. */
+function describeDeclaration(sourceFile: ts.SourceFile, node: ts.Node): Declaration | null {
+  if (ts.isVariableDeclaration(node)) return describeVariable(sourceFile, node);
+  if (ts.isFunctionDeclaration(node)) {
+    const kind = isComponent(node.name, node) ? "component" : "function";
+    return { nameNode: node.name, kind, facts: factsOf(sourceFile, node) };
+  }
+  if (ts.isMethodDeclaration(node)) {
+    return { nameNode: node.name, kind: "method", facts: factsOf(sourceFile, node) };
+  }
+  if (ts.isGetAccessorDeclaration(node)) {
+    return { nameNode: node.name, kind: "getter", facts: factsOf(sourceFile, node) };
+  }
+  if (ts.isClassDeclaration(node)) return { nameNode: node.name, kind: "class" };
+  if (ts.isTypeAliasDeclaration(node)) return { nameNode: node.name, kind: "type" };
+  if (ts.isInterfaceDeclaration(node)) return { nameNode: node.name, kind: "interface" };
+  if (ts.isEnumMember(node)) return { nameNode: node.name, kind: "enum-member" };
+  if (ts.isPropertySignature(node) || ts.isPropertyDeclaration(node)) {
+    return describeTyped(sourceFile, node, "property");
+  }
+  if (ts.isParameter(node)) return describeTyped(sourceFile, node, "parameter");
+  return null;
+}
+
+/** A variable is a function or component when it holds one, else a const or a variable. */
+function describeVariable(sourceFile: ts.SourceFile, node: ts.VariableDeclaration): Declaration {
+  const fn = node.initializer;
+  if (isFnLike(fn)) {
+    const kind = isComponent(node.name, fn) ? "component" : "function";
+    return { nameNode: node.name, kind, facts: factsOf(sourceFile, fn) };
+  }
+  const isConst = !!(ts.getCombinedNodeFlags(node) & ts.NodeFlags.Const);
+  return describeTyped(sourceFile, node, isConst ? "const" : "variable");
+}
+
+/** A declaration whose one fact is its declared type. */
+function describeTyped(
+  sourceFile: ts.SourceFile,
+  node: { name: ts.Node; type?: ts.TypeNode },
+  kind: Kind,
+): Declaration {
+  return { nameNode: node.name, kind, facts: { type: typeText(sourceFile, node.type) } };
+}
+
+/**
+ * The declaration as an identifier, or none when its name is not a plain identifier
+ * (a destructuring pattern, a computed key) or starts with `_`, which marks it unused on purpose.
+ */
+function toIdentifiers(
+  sourceFile: ts.SourceFile,
+  filePath: string,
+  { nameNode, kind, facts = {} }: Declaration,
+  isNew: boolean,
+): Identifier[] {
+  if (!nameNode || !ts.isIdentifier(nameNode) || nameNode.text.startsWith("_")) return [];
+  const name = nameNode.text;
+  const { line } = sourceFile.getLineAndCharacterOfPosition(nameNode.getStart(sourceFile));
+  const id = { name, kind, file: filePath, line: line + 1, isNew, segments: tokenize(name) };
+  return [{ ...id, ...withoutUndefined(facts) }];
+}
+
+/** A PascalCase function that returns JSX: React's convention for a component. */
+function isComponent(nameNode: ts.Node | undefined, fn: ts.Node): boolean {
+  const isPascal = !!nameNode && ts.isIdentifier(nameNode) && /^[A-Z]/.test(nameNode.text);
+  return isPascal && containsJsx(fn);
+}
+
+/** Whether JSX appears anywhere in the node. `forEachChild` stops at the first `true`. */
+function containsJsx(node: ts.Node): boolean {
+  return (
+    ts.isJsxElement(node)
+    || ts.isJsxSelfClosingElement(node)
+    || ts.isJsxFragment(node)
+    || !!ts.forEachChild(node, containsJsx)
+  );
+}
+
+/** The signature facts Jev gets to weigh a callable's name against. */
+function factsOf(sourceFile: ts.SourceFile, fn: Fn): Facts {
+  return {
+    async: isAsync(fn) ? true : undefined,
+    returnType: typeText(sourceFile, fn.type, true),
+    arity: fn.parameters.length,
+  };
+}
+
+/** Callers await it: the `async` keyword, or a declared `Promise<…>` return type. */
+function isAsync(fn: Fn): boolean {
+  const hasAsyncKeyword = ts.canHaveModifiers(fn)
+    && !!ts.getModifiers(fn)?.some((modifier) => modifier.kind === ts.SyntaxKind.AsyncKeyword);
+  return hasAsyncKeyword || isPromise(fn.type);
+}
+
+/**
+ * Declared type text, never inferred. `unwrapPromise` takes the value a caller gets after awaiting.
+ */
+function typeText(
+  sourceFile: ts.SourceFile,
+  type: ts.TypeNode | undefined,
+  unwrapPromise = false,
+): string | undefined {
+  if (!type) return undefined;
+  if (unwrapPromise && isPromise(type)) return typeText(sourceFile, type.typeArguments?.[0]);
+  return type.getText(sourceFile);
+}
+
+/** Whether the type is written as `Promise<…>`. */
+function isPromise(type: ts.TypeNode | undefined): type is ts.TypeReferenceNode {
+  return !!type
+    && ts.isTypeReferenceNode(type)
+    && ts.isIdentifier(type.typeName)
+    && type.typeName.text === "Promise";
+}
+
+/** An arrow function or function expression: what makes a variable a function. */
+function isFnLike(node: ts.Node | undefined): node is ts.ArrowFunction | ts.FunctionExpression {
+  return !!node && (ts.isArrowFunction(node) || ts.isFunctionExpression(node));
+}

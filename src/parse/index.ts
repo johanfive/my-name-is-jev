@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import type { Extractor, Identifier } from "../types.ts";
-import { fromBash } from "./bash.ts";
+import { extractFromBash } from "./bash.ts";
 import { relativize } from "./path.ts";
 
 type Change = { path: string; before: string | null; after: string };
@@ -16,20 +16,36 @@ type ToolInput = {
   command?: string;
 } & Partial<Edit>;
 
-const applyEdit = (content: string, e: Edit) =>
-  e.replace_all
-    ? content.split(e.old_string).join(e.new_string)
-    : content.replace(e.old_string, () => e.new_string);
+/**
+ * Tool call in, identifiers out.
+ * `isNew` means absent before this call, so names the agent did not touch are left alone.
+ */
+export function parseToolCall(
+  toolName: string,
+  input: unknown,
+  extractors: Extractor[],
+): Identifier[] {
+  const toolInput = (input ?? {}) as ToolInput;
+  if (toolName === "Bash") return extractFromBash(String(toolInput.command ?? ""));
+  const change = reconstructChange(toolName, toolInput);
+  if (!change) return [];
+  const extract = (content: string | null) => extractAll(extractors, change.path, content);
+  const previousKeys = new Set(extract(change.before).map(toIdentifierKey));
+  return extract(change.after).map((id) => ({
+    ...id,
+    isNew: isIntroduced(id, change, previousKeys),
+  }));
+}
 
 /**
- * Reconstruct the file a Write/Edit/MultiEdit call would produce.
+ * Reconstruct the file a Write/Edit/MultiEdit call would produce, and the file before it.
  * `null` for tools that don't touch a file.
  */
-function changeFor(toolName: string, input: ToolInput): Change | null {
-  const abs = input.file_path;
-  if (!abs) return null;
-  const path = relativize(abs);
-  const before = existsSync(abs) ? readFileSync(abs, "utf8") : null;
+function reconstructChange(toolName: string, input: ToolInput): Change | null {
+  const absolutePath = input.file_path;
+  if (!absolutePath) return null;
+  const path = relativize(absolutePath);
+  const before = existsSync(absolutePath) ? readFileSync(absolutePath, "utf8") : null;
   switch (toolName) {
     case "Write":
       return { path, before, after: String(input.content ?? "") };
@@ -42,36 +58,32 @@ function changeFor(toolName: string, input: ToolInput): Change | null {
   }
 }
 
-const keyOf = (id: Identifier) => `${id.kind}:${id.name}`;
-
 /**
- * Tool call in, identifiers out.
- * `isNew` means absent before this call:
- * a file is new when it did not exist,
- * a directory when it does not exist on disk,
- * anything else when `kind:name` is not in the previous content.
+ * Whether this tool call introduces the identifier:
+ * a file when it did not exist,
+ * a directory when it does not exist on disk (the path extractor already knows),
+ * anything else when its kind and name are not in the previous content.
  */
-export function parse(toolName: string, input: unknown, extractors: Extractor[]): Identifier[] {
-  const tool = (input ?? {}) as ToolInput;
-  if (toolName === "Bash") return fromBash(String(tool.command ?? ""));
-  const change = changeFor(toolName, tool);
-  if (!change) return [];
-
-  const run = (content: string | null) =>
-    content === null
-      ? []
-      : extractors
-          .filter((x) => x.test(change.path))
-          .flatMap((x) => x.extract(change.path, content));
-
-  const previous = new Set(run(change.before).map(keyOf));
-  return run(change.after).map((id) => ({
-    ...id,
-    isNew:
-      id.kind === "file"
-        ? change.before === null
-        : id.kind === "dir"
-          ? id.isNew
-          : !previous.has(keyOf(id)),
-  }));
+function isIntroduced(id: Identifier, change: Change, previousKeys: Set<string>): boolean {
+  if (id.kind === "file") return change.before === null;
+  if (id.kind === "dir") return id.isNew;
+  return !previousKeys.has(toIdentifierKey(id));
 }
+
+/** Every identifier the matching extractors find in the content. No content, no identifiers. */
+function extractAll(extractors: Extractor[], path: string, content: string | null) {
+  if (content === null) return [];
+  return extractors
+    .filter((extractor) => extractor.test(path))
+    .flatMap((extractor) => extractor.extract(path, content));
+}
+
+/** Apply one edit the way Claude Code does: the first match, or every match with `replace_all`. */
+function applyEdit(content: string, edit: Edit) {
+  return edit.replace_all
+    ? content.split(edit.old_string).join(edit.new_string)
+    : content.replace(edit.old_string, () => edit.new_string);
+}
+
+/** Kind and name: what makes an identifier the same one before and after an edit. */
+const toIdentifierKey = (id: Identifier) => `${id.kind}:${id.name}`;

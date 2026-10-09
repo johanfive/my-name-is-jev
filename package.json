@@ -1,6 +1,6 @@
 {
   "name": "my-name-is-jev",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "description": "Naming-convention enforcement for coding agents. Shape is deterministic, meaning is Jev.",
   "type": "module",
@@ -22,7 +22,9 @@
     "explain": "node bin/nij.ts explain",
     "check": "node bin/nij.ts check",
     "version": "node scripts/sync-manifest-versions.ts",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "verify": "npm run lint && npm run typecheck",
+    "prepare": "git config core.hooksPath .githooks || exit 0"
   },
   "dependencies": {
     "@typesafe-ai/sdk": "^0.6.0",

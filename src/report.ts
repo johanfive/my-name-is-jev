@@ -3,17 +3,7 @@ import type { Finding, ResolvedConfig, Severity } from "./types.ts";
 /** One decision and one text any agent can act on. Adapters map `decision` onto their protocol. */
 export type Report = { decision: Severity; findings: Finding[]; text: string };
 
-/** One line per finding, written for a model to act on. */
-export const formatFinding = (f: Finding) =>
-  [
-    `${f.identifier.name} (${f.identifier.kind}, ${f.identifier.file}): ${f.rule.message}${/[.!?]$/.test(f.rule.message) ? "" : "."}`,
-    f.verdict.detail && `${f.verdict.detail[0].toUpperCase()}${f.verdict.detail.slice(1)}.`,
-    f.rule.example && `Example: ${f.rule.example}.`,
-  ]
-    .filter(Boolean)
-    .join(" ");
-
-const HEADING = {
+const HEADING_BY_SECTION = {
   block: "Naming convention violations. Rename and retry:",
   ask: "Naming convention concerns:",
   /** A failed check is a fact about the name's shape. */
@@ -25,14 +15,12 @@ const HEADING = {
     + "or keep the name when it follows a convention this codebase already uses:",
 };
 
-const RANK: Severity[] = [
+/** Most restrictive first. */
+const SEVERITY_RANKING: Severity[] = [
   "block",
   "ask",
   "warn",
 ];
-const lines = (fs: Finding[]) => fs.map((f) => `- ${formatFinding(f)}`).join("\n");
-const section = (heading: string, fs: Finding[]) =>
-  fs.length ? `${heading}\n${lines(fs)}` : "";
 
 /**
  * Each finding's severity is its rule's, else the config default, else warn.
@@ -41,21 +29,63 @@ const section = (heading: string, fs: Finding[]) =>
  * so one deny or ask covers all of them and the agent's re-emit fixes everything at once.
  * When nothing blocks or asks, failed checks are stated firmly and judge verdicts as advice.
  */
-export function report(findings: Finding[], config: ResolvedConfig): Report | null {
+export function buildReport(findings: Finding[], config: ResolvedConfig): Report | null {
   if (!findings.length) return null;
-  const severityOf = (f: Finding): Severity => f.rule.severity ?? config.severity;
-  const decision = RANK.find((s) => findings.some((f) => severityOf(f) === s))!;
-  if (decision === "warn") {
-    const checked = findings.filter((f) => f.rule.check);
-    const judged = findings.filter((f) => f.rule.judge);
-    const text = [section(HEADING.warnCheck, checked), section(HEADING.warnJudge, judged)]
-      .filter(Boolean)
-      .join("\n");
-    return { decision, findings: [...checked, ...judged], text };
-  }
-  const deciding = findings.filter((f) => severityOf(f) === decision);
-  const rest = findings.filter((f) => severityOf(f) !== decision);
-  const also = rest.length ? `\nAlso, while you are at it:\n${lines(rest)}` : "";
-  const text = `${HEADING[decision]}\n${lines(deciding)}${also}`;
+  const decision = SEVERITY_RANKING.find((severity) =>
+    findings.some((finding) => severityOf(finding, config) === severity),
+  )!;
+  if (decision === "warn") return buildWarning(findings);
+  return buildDecision(decision, findings, config);
+}
+
+/** One line per finding, written for a model to act on. */
+export function formatFinding({ identifier, rule, verdict }: Finding): string {
+  return [
+    `${identifier.name} (${identifier.kind}, ${identifier.file}): ${endWithFullStop(rule.message)}`,
+    verdict.detail && `${capitalize(verdict.detail)}.`,
+    rule.example && `Example: ${rule.example}.`,
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
+/** The finding's rule severity, else the config default. Rules override the config per rule. */
+export const severityOf = (finding: Finding, config: ResolvedConfig): Severity =>
+  finding.rule.severity ?? config.severity;
+
+/** Failed checks stated firmly, then judge verdicts as advice. */
+function buildWarning(findings: Finding[]): Report {
+  const checked = findings.filter((finding) => finding.rule.check);
+  const judged = findings.filter((finding) => finding.rule.judge);
+  const checkSection = formatSection(HEADING_BY_SECTION.warnCheck, checked);
+  const judgeSection = formatSection(HEADING_BY_SECTION.warnJudge, judged);
+  const text = [checkSection, judgeSection].filter(Boolean).join("\n");
+  return { decision: "warn", findings: [...checked, ...judged], text };
+}
+
+/** The deciding findings under their heading, then every other finding. */
+function buildDecision(
+  decision: Exclude<Severity, "warn">,
+  findings: Finding[],
+  config: ResolvedConfig,
+): Report {
+  const deciding = findings.filter((finding) => severityOf(finding, config) === decision);
+  const rest = findings.filter((finding) => severityOf(finding, config) !== decision);
+  const also = rest.length ? `\nAlso, while you are at it:\n${formatLines(rest)}` : "";
+  const text = `${HEADING_BY_SECTION[decision]}\n${formatLines(deciding)}${also}`;
   return { decision, findings: [...deciding, ...rest], text };
 }
+
+/** A heading over its findings, or nothing when there are none, so empty sections drop out. */
+const formatSection = (heading: string, findings: Finding[]) =>
+  findings.length ? `${heading}\n${formatLines(findings)}` : "";
+
+/** The findings as a bulleted list. */
+const formatLines = (findings: Finding[]) =>
+  findings.map((finding) => `- ${formatFinding(finding)}`).join("\n");
+
+/** The text ending in a full stop. Rule messages are written by people, with or without one. */
+const endWithFullStop = (text: string) => (/[.!?]$/.test(text) ? text : `${text}.`);
+
+/** The text with its first letter capitalized. A verdict's detail is written as a fragment. */
+const capitalize = (text: string) => `${text[0].toUpperCase()}${text.slice(1)}`;

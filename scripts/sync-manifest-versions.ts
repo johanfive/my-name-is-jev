@@ -3,11 +3,22 @@
 import { readFileSync, writeFileSync } from "node:fs";
 
 // One entry per supported agent.
-const manifests = [".claude-plugin/plugin.json"];
+const MANIFEST_PATHS = [".claude-plugin/plugin.json"];
 
-const { version } = JSON.parse(readFileSync("package.json", "utf8"));
-for (const path of manifests) {
-  const manifest = JSON.parse(readFileSync(path, "utf8"));
-  manifest.version = version;
-  writeFileSync(path, JSON.stringify(manifest, null, 2) + "\n");
+syncManifestVersions();
+
+/** Give every manifest the package's version. Claude Code reads the version from its manifest. */
+function syncManifestVersions() {
+  const { version } = readJson("package.json");
+  for (const path of MANIFEST_PATHS) writeJson(path, { ...readJson(path), version });
+}
+
+/** The parsed JSON file. */
+function readJson(path: string) {
+  return JSON.parse(readFileSync(path, "utf8"));
+}
+
+/** Write the value as JSON, two-space indented with a final newline, the way npm writes JSON. */
+function writeJson(path: string, value: unknown) {
+  writeFileSync(path, JSON.stringify(value, null, 2) + "\n");
 }
