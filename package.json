@@ -23,8 +23,9 @@
     "check": "node bin/nij.ts check",
     "version": "node scripts/sync-manifest-versions.ts",
     "lint": "eslint .",
-    "verify": "npm run lint && npm run typecheck",
-    "prepare": "git config core.hooksPath .githooks || exit 0"
+    "verify": "npm run lint && npm run typecheck && npm test",
+    "prepare": "git config core.hooksPath .githooks || exit 0",
+    "test": "node --test --experimental-test-module-mocks --test-timeout=10000"
   },
   "dependencies": {
     "@typesafe-ai/sdk": "^0.6.0",
