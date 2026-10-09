@@ -1,6 +1,7 @@
 import type { Check } from "../../types.ts";
 
-export const matchesRegex =
-  (re: RegExp): Check =>
-    (id) =>
-      re.test(id.name) ? { ok: true } : { ok: false, detail: `does not match ${re}` };
+/** A check that the whole name matches the pattern, for conventions no case style covers. */
+export function matchesRegex(pattern: RegExp): Check {
+  return (id) =>
+    pattern.test(id.name) ? { ok: true } : { ok: false, detail: `does not match ${pattern}` };
+}

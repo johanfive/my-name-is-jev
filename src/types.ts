@@ -24,11 +24,9 @@ export type Identifier = {
   line?: number;
   /** Introduced by the current tool call. Only new identifiers are checked. */
   isNew: boolean;
-  /** Lowercase words, separator-agnostic. See tokenize.ts. */
+  /** Lowercase words, separator-agnostic. See `tokenize`. */
   segments: string[];
-  /**
-   * Signature facts the parser could read. Present only when declared; also given to Jev as state.
-   */
+  // Signature facts the parser could read. Present only when declared; also given to Jev as state.
   /** Callers await it: the `async` keyword, or a declared `Promise<…>` return type. */
   async?: boolean;
   /**
@@ -86,7 +84,7 @@ export type Severity = "block" | "warn" | "ask";
 type RuleBase = {
   id: string;
   select?: Selector;
-  /** Default: config.severity ("warn"). */
+  /** Defaults to the config's `severity`. */
   severity?: Severity;
   /** Human-authored. This is what the agent reads. */
   message: string;
@@ -107,12 +105,9 @@ export type Config = {
   severity?: Severity;
   extractors?: Extractor[];
   jev?: { baseURL?: string; model?: string };
-  /**
-   * Jev answers are cached on disk, bounded.
-   * `false` disables. Defaults: 20000 entries, 30 days since last use.
-   */
+  /** Jev answers are cached on disk, bounded by rows and days since last use. `false` disables. */
   cache?: false | { entriesMax?: number; ageMaxDays?: number };
-  /** Also apply the user-level config. Default true. A project sets `false` to opt out of it. */
+  /** Also apply the user-level config. A project sets `false` to opt out of it. */
   global?: boolean;
 };
 
@@ -123,4 +118,5 @@ export type ResolvedConfig = Required<Omit<Config, "jev" | "cache" | "global">> 
   sources: string[];
 };
 
+/** Types a config file's export. It returns the config as-is: the point is the editor's help. */
 export const defineConfig = (config: Config): Config => config;

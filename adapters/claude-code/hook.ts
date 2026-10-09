@@ -4,38 +4,54 @@
 import { registerHooks } from "node:module";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { text } from "node:stream/consumers";
 import { pathToFileURL } from "node:url";
 import { handle } from "./handle.ts";
 
-// A user-level nij.config.ts has no node_modules to resolve the library from; point the bare
-// specifier at this plugin.
-const packageRoot = pathToFileURL(join(import.meta.dirname, "..", "..", "package.json")).href;
-registerHooks({
-  resolve: (specifier, context, next) =>
-    specifier === "my-name-is-jev" || specifier.startsWith("my-name-is-jev/")
-      ? next(specifier, { ...context, parentURL: packageRoot })
-      : next(specifier, context),
-});
+const LIBRARY_NAME = "my-name-is-jev";
+/** The key and backend the user gave the plugin (`/plugin configure`), and its data directory. */
+const PLUGIN_VAR_BY_NIJ_VAR = {
+  NIJ_CACHE_DIR: "CLAUDE_PLUGIN_DATA",
+  NIJ_JEV_API_KEY: "CLAUDE_PLUGIN_OPTION_JEV_API_KEY",
+  NIJ_JEV_BASE_URL: "CLAUDE_PLUGIN_OPTION_JEV_BASE_URL",
+};
 
-// Native homes: the plugin's data directory for the cache, the user's Claude directory for a user-
-// level nij.config.ts.
-if (process.env.CLAUDE_PLUGIN_DATA) process.env.NIJ_CACHE_DIR ??= process.env.CLAUDE_PLUGIN_DATA;
-process.env.NIJ_CONFIG_DIR ??= process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), ".claude");
-// The key and backend the user gave the plugin (`/plugin configure`); an explicit NIJ_JEV_*
-// variable still wins.
-if (process.env.CLAUDE_PLUGIN_OPTION_JEV_API_KEY) {
-  process.env.NIJ_JEV_API_KEY ??= process.env.CLAUDE_PLUGIN_OPTION_JEV_API_KEY;
+await main();
+
+/** Read the tool call, answer it. Errors are logged, never thrown: the agent must not break. */
+async function main() {
+  aliasLibrary();
+  mapPluginEnv();
+  const input = await text(process.stdin);
+  try {
+    const output = await handle(JSON.parse(input));
+    if (output) process.stdout.write(JSON.stringify(output));
+  } catch (err) {
+    process.stderr.write(`nij: ${(err as Error).message}\n`);
+  }
 }
-if (process.env.CLAUDE_PLUGIN_OPTION_JEV_BASE_URL) {
-  process.env.NIJ_JEV_BASE_URL ??= process.env.CLAUDE_PLUGIN_OPTION_JEV_BASE_URL;
+
+/**
+ * Resolve imports of the library to this plugin.
+ * A user-level nij.config.ts has no node_modules to resolve the library from.
+ */
+function aliasLibrary() {
+  const packageUrl = pathToFileURL(join(import.meta.dirname, "..", "..", "package.json")).href;
+  registerHooks({
+    resolve: (specifier, context, next) =>
+      specifier === LIBRARY_NAME || specifier.startsWith(`${LIBRARY_NAME}/`)
+        ? next(specifier, { ...context, parentURL: packageUrl })
+        : next(specifier, context),
+  });
 }
 
-let raw = "";
-for await (const chunk of process.stdin) raw += chunk;
-
-try {
-  const out = await handle(JSON.parse(raw));
-  if (out) process.stdout.write(JSON.stringify(out));
-} catch (err) {
-  process.stderr.write(`nij: ${(err as Error).message}\n`);
+/**
+ * Point nij at Claude Code's native homes and at the plugin's settings.
+ * An explicit NIJ_* variable still wins.
+ */
+function mapPluginEnv() {
+  for (const [nijVar, pluginVar] of Object.entries(PLUGIN_VAR_BY_NIJ_VAR)) {
+    if (process.env[pluginVar]) process.env[nijVar] ??= process.env[pluginVar];
+  }
+  process.env.NIJ_CONFIG_DIR ??= process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), ".claude");
 }

@@ -4,21 +4,35 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { pathExtractor } from "./parse/path.ts";
 import { typescriptExtractor } from "./parse/typescript.ts";
-import { resolveProjectDir } from "./jev-client.ts";
+import { resolveProjectDir } from "./project-dir.ts";
 import type { Config, ResolvedConfig } from "./types.ts";
 
+const CONFIG_FILE_NAMES = [
+  "nij.config.ts",
+  "nij.config.mts",
+  "nij.config.js",
+  "nij.config.mjs",
+];
+
 /**
- * Where the user-level config lives:
- * an explicit override (adapters set it to the agent's own config dir), else the OS convention.
+ * Load the project's nij.config.{ts,mts,js,mjs} layered over the user-level one.
+ * Without either, the built-in presets apply.
  */
-export function resolveConfigDir(): string {
-  if (process.env.NIJ_CONFIG_DIR) return process.env.NIJ_CONFIG_DIR;
-  if (platform() === "win32") {
-    return join(process.env.APPDATA ?? join(homedir(), "AppData", "Roaming"), "nij");
+export async function loadConfig(dir = resolveProjectDir()): Promise<ResolvedConfig> {
+  const project = await importConfig(dir);
+  const global = project?.config.global === false ? null : await importConfig(resolveConfigDir());
+  if (!project && !global) return loadDefaultConfig(dir);
+  const sources = [global?.file, project?.file].filter((file): file is string => !!file);
+  if (global && project) {
+    return resolveConfig(layerConfigs(global.config, project.config), sources);
   }
-  return join(process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config"), "nij");
+  return resolveConfig((global ?? project)!.config, sources);
 }
 
+/**
+ * Fill in every default a config leaves out,
+ * so the rest of nij never has to check for a missing setting.
+ */
 export function resolveConfig(config: Config, sources: string[] = []): ResolvedConfig {
   return {
     rules: config.rules,
@@ -33,19 +47,27 @@ export function resolveConfig(config: Config, sources: string[] = []): ResolvedC
   };
 }
 
-async function importConfig(dir: string): Promise<{ file: string; config: Config } | null> {
-  for (const ext of [
-    "ts",
-    "mts",
-    "js",
-    "mjs",
-  ]) {
-    const file = join(dir, `nij.config.${ext}`);
-    if (!existsSync(file)) continue;
-    const mod = await import(pathToFileURL(file).href);
-    return { file, config: mod.default ?? mod };
+/**
+ * Where the user-level config lives:
+ * an explicit override (adapters set it to the agent's own config dir), else the OS convention.
+ */
+export function resolveConfigDir(): string {
+  if (process.env.NIJ_CONFIG_DIR) return process.env.NIJ_CONFIG_DIR;
+  if (platform() === "win32") {
+    return join(process.env.APPDATA ?? join(homedir(), "AppData", "Roaming"), "nij");
   }
-  return null;
+  return join(process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config"), "nij");
+}
+
+/**
+ * Import the first nij config file in `dir`.
+ * Null when there is none, so the caller can layer configs or fall back to the presets.
+ */
+async function importConfig(dir: string): Promise<{ file: string; config: Config } | null> {
+  const file = CONFIG_FILE_NAMES.map((name) => join(dir, name)).find((path) => existsSync(path));
+  if (!file) return null;
+  const imported = await import(pathToFileURL(file).href);
+  return { file, config: imported.default ?? imported };
 }
 
 /**
@@ -55,11 +77,13 @@ async function importConfig(dir: string): Promise<{ file: string; config: Config
  * so a personal `block` never escalates a project's rules.
  * The other settings take the project's value when it sets one.
  */
-function layer(global: Config, project: Config): Config {
-  const overridden = new Set(project.rules.map((r) => r.id));
+function layerConfigs(global: Config, project: Config): Config {
+  const overridden = new Set(project.rules.map((rule) => rule.id));
   const globalRules = global.rules
-    .filter((r) => !overridden.has(r.id))
-    .map((r) => ({ ...r, severity: r.severity ?? global.severity ?? "warn" }) as typeof r);
+    .filter((rule) => !overridden.has(rule.id))
+    .map(
+      (rule) => ({ ...rule, severity: rule.severity ?? global.severity ?? "warn" }) as typeof rule,
+    );
   return {
     ...global,
     ...project,
@@ -69,28 +93,15 @@ function layer(global: Config, project: Config): Config {
 }
 
 /**
- * Load the project's nij.config.{ts,mts,js,mjs} layered over the user-level one.
- * Without either, the built-in presets apply.
+ * The built-in presets, with a note on stderr saying so.
+ * A project with no config still gets checked, and its author learns why.
  */
-export async function loadConfig(dir = resolveProjectDir()): Promise<ResolvedConfig> {
-  const project = await importConfig(dir);
-  const global = project?.config.global === false ? null : await importConfig(resolveConfigDir());
-  if (!project && !global) {
-    process.stderr.write(
-      `nij: no nij.config.ts in ${dir} or ${resolveConfigDir()}; the built-in presets apply.\n`,
-    );
-    // Imported here, not at the top:
-    // the presets import the core, and the core must not import them back.
-    const presets = await import("./built-in/presets/index.ts");
-    return resolveConfig({
-      rules: [
-        ...presets.typescript,
-        ...presets.functionsStartWithVerb,
-        ...presets.stableToVariable,
-      ],
-    });
-  }
-  const sources = [global?.file, project?.file].filter((f): f is string => !!f);
-  if (global && project) return resolveConfig(layer(global.config, project.config), sources);
-  return resolveConfig((global ?? project)!.config, sources);
+async function loadDefaultConfig(dir: string): Promise<ResolvedConfig> {
+  process.stderr.write(
+    `nij: no nij.config.ts in ${dir} or ${resolveConfigDir()}; the built-in presets apply.\n`,
+  );
+  // Imported here, not at the top:
+  // the presets import the core, and the core must not import them back.
+  const { defaultRules } = await import("./built-in/presets/index.ts");
+  return resolveConfig({ rules: defaultRules });
 }
