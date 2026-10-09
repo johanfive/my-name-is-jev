@@ -19,7 +19,7 @@ export function resolveConfigDir(): string {
   return join(process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config"), "nij");
 }
 
-export function resolve(config: Config, sources: string[] = []): ResolvedConfig {
+export function resolveConfig(config: Config, sources: string[] = []): ResolvedConfig {
   return {
     rules: config.rules,
     severity: config.severity ?? "warn",
@@ -27,8 +27,8 @@ export function resolve(config: Config, sources: string[] = []): ResolvedConfig 
     jev: config.jev ?? {},
     cache:
       config.cache === false
-        ? { enabled: false, maxEntries: 0, maxAgeDays: 0 }
-        : { enabled: true, maxEntries: 20_000, maxAgeDays: 30, ...config.cache },
+        ? { enabled: false, entriesMax: 0, ageMaxDays: 0 }
+        : { enabled: true, entriesMax: 20_000, ageMaxDays: 30, ...config.cache },
     sources,
   };
 }
@@ -82,7 +82,7 @@ export async function loadConfig(dir = resolveProjectDir()): Promise<ResolvedCon
     // Imported here, not at the top:
     // the presets import the core, and the core must not import them back.
     const presets = await import("./built-in/presets/index.ts");
-    return resolve({
+    return resolveConfig({
       rules: [
         ...presets.typescript,
         ...presets.functionsStartWithVerb,
@@ -91,6 +91,6 @@ export async function loadConfig(dir = resolveProjectDir()): Promise<ResolvedCon
     });
   }
   const sources = [global?.file, project?.file].filter((f): f is string => !!f);
-  if (global && project) return resolve(layer(global.config, project.config), sources);
-  return resolve((global ?? project)!.config, sources);
+  if (global && project) return resolveConfig(layer(global.config, project.config), sources);
+  return resolveConfig((global ?? project)!.config, sources);
 }

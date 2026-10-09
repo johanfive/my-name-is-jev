@@ -14,7 +14,7 @@ import { describeConfidence } from "./helpers/describe-confidence.ts";
  * so whether the first word is a verb is never asked on its own.
  * Each example in the criteria says why it is a yes or a no: Jev answers better for it.
  */
-export const verbFirst =
+export const judgeVerbFirst =
   ({
     nounPhraseThreshold = 0.6,
     objectActionThreshold = 0.4,

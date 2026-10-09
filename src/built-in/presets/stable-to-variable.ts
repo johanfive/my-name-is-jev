@@ -1,4 +1,4 @@
-import { ordered } from "../judges/ordered.ts";
+import { judgeStableToVariable } from "../judges/judge-stable-to-variable.ts";
 import type { Rule } from "../../types.ts";
 
 /** Words go from most stable to most variable. */
@@ -20,7 +20,7 @@ export const stableToVariable: Rule[] = [
         "string",
       ],
     },
-    judge: ordered(),
+    judge: judgeStableToVariable(),
     message:
       "A name sorts and reads best with its words ordered from most stable to most variable, "
       + "the way a date goes year, month, day. What counts as stable depends on how things are "

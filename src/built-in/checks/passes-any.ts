@@ -1,7 +1,7 @@
 import type { Check, Verdict } from "../../types.ts";
 
 /** Passes at the first check that passes. If none pass, returns the last failure. */
-export const any =
+export const passesAny =
   (...checks: Check[]): Check =>
     (id, ctx) => {
       let last: Verdict = { ok: false, detail: "no checks" };

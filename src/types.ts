@@ -111,14 +111,14 @@ export type Config = {
    * Jev answers are cached on disk, bounded.
    * `false` disables. Defaults: 20000 entries, 30 days since last use.
    */
-  cache?: false | { maxEntries?: number; maxAgeDays?: number };
+  cache?: false | { entriesMax?: number; ageMaxDays?: number };
   /** Also apply the user-level config. Default true. A project sets `false` to opt out of it. */
   global?: boolean;
 };
 
 export type ResolvedConfig = Required<Omit<Config, "jev" | "cache" | "global">> & {
   jev: { baseURL?: string; model?: string };
-  cache: { enabled: boolean; maxEntries: number; maxAgeDays: number };
+  cache: { enabled: boolean; entriesMax: number; ageMaxDays: number };
   /** The config files that were loaded, user-level first. */
   sources: string[];
 };

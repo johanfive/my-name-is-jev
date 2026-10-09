@@ -2,10 +2,10 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { resolveCacheDir } from "../../src/cache.ts";
 import { loadConfig } from "../../src/config.ts";
-import { createJev, judgeCtx } from "../../src/jev-client.ts";
-import { parse } from "../../src/parse/index.ts";
-import { run } from "../../src/pipeline.ts";
-import { report } from "../../src/report.ts";
+import { createJev, createJudgeCtx } from "../../src/jev-client.ts";
+import { parseToolCall } from "../../src/parse/index.ts";
+import { runRules } from "../../src/pipeline.ts";
+import { buildReport } from "../../src/report.ts";
 
 export type HookInput = { session_id?: string; tool_name: string; tool_input: unknown };
 export type HookOutput = {
@@ -50,23 +50,23 @@ export async function handle(input: HookInput): Promise<HookOutput | null> {
   try {
     if (!TOOLS.has(input.tool_name)) return null;
     const config = await loadConfig();
-    const identifiers = parse(input.tool_name, input.tool_input, config.extractors);
+    const identifiers = parseToolCall(input.tool_name, input.tool_input, config.extractors);
     if (!identifiers.length) return null;
 
     const jev = createJev(config);
     const notice = jev ? undefined : warnKeyMissingOnce(input.session_id);
-    const findings = await run(
+    const findings = await runRules(
       config.rules,
       identifiers,
       jev
       && ((id) =>
-        judgeCtx(
+        createJudgeCtx(
           jev,
           id,
           identifiers.filter((o) => o !== id),
         )),
     );
-    const r = report(findings, config);
+    const r = buildReport(findings, config);
     if (!r) return notice ? { systemMessage: notice } : null;
 
     // A warning carries no `permissionDecision`: "allow" would skip the user's own permission

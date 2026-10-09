@@ -140,7 +140,7 @@ export function createJev(config: ResolvedConfig, trace?: Trace): Jev | null {
  * The default state is the cheap-win context:
  * name, kind, segments, file, and the signature facts when known.
  */
-export function judgeCtx(jev: Jev, id: Identifier, siblings: Identifier[]): JudgeCtx {
+export function createJudgeCtx(jev: Jev, id: Identifier, siblings: Identifier[]): JudgeCtx {
   const state: State = { name: id.name, kind: id.kind, segments: id.segments, file: id.file };
   for (const k of [
     "async",

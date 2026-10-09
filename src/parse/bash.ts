@@ -1,5 +1,5 @@
 import type { Identifier } from "../types.ts";
-import { fromPath } from "./path.ts";
+import { extractFromPath } from "./path.ts";
 
 /** Split a command line on whitespace, honouring single and double quotes. No expansion. */
 export function splitShellWords(command: string): string[] {
@@ -11,7 +11,7 @@ export function splitShellWords(command: string): string[] {
  * Paths introduced by name-creating commands:
  * mkdir, touch, git checkout -b, git switch -c, cp/mv destinations.
  */
-export function fromBash(command: string): Identifier[] {
+export function extractFromBash(command: string): Identifier[] {
   const out: Identifier[] = [];
   // ponytail: split on separators naively; a `;` inside quotes is rare in agent commands.
   for (const part of command.split(/\s*(?:&&|\|\||;|\|)\s*/)) {
@@ -20,14 +20,14 @@ export function fromBash(command: string): Identifier[] {
     const args = w.slice(1).filter((a) => !a.startsWith("-"));
     switch (w[0]) {
       case "mkdir":
-        for (const p of args) out.push(...fromPath(p, { isDir: true }));
+        for (const p of args) out.push(...extractFromPath(p, { isDir: true }));
         break;
       case "touch":
-        for (const p of args) out.push(...fromPath(p));
+        for (const p of args) out.push(...extractFromPath(p));
         break;
       case "cp":
       case "mv":
-        if (args.length >= 2) out.push(...fromPath(args[args.length - 1]));
+        if (args.length >= 2) out.push(...extractFromPath(args[args.length - 1]));
         break;
       case "git": {
         const i = w.findIndex(

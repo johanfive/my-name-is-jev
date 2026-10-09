@@ -41,7 +41,7 @@ export type AnswerCache = {
 
 /**
  * Bounded cache of Jev answers, one row per question.
- * Pruned on open to `maxEntries` rows and `maxAgeDays` since last use,
+ * Pruned on open to `entriesMax` rows and `ageMaxDays` since last use,
  * so it can never grow past what the config allows.
  * Returns null when the cache is disabled or the directory is unwritable.
  */
@@ -61,12 +61,12 @@ export function openCache(config: ResolvedConfig): AnswerCache | null {
       CREATE INDEX IF NOT EXISTS answers_last_used ON answers (last_used);
     `);
     db.prepare("DELETE FROM answers WHERE last_used < ?").run(
-      Date.now() - config.cache.maxAgeDays * 86_400_000,
+      Date.now() - config.cache.ageMaxDays * 86_400_000,
     );
     db.prepare(
       "DELETE FROM answers WHERE key IN "
       + "(SELECT key FROM answers ORDER BY last_used DESC LIMIT -1 OFFSET ?)",
-    ).run(config.cache.maxEntries);
+    ).run(config.cache.entriesMax);
   } catch {
     return null; // read-only home or a broken file: run without a cache rather than fail
   }

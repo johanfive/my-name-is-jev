@@ -1,4 +1,4 @@
-import { verbFirst } from "../judges/verb-first.ts";
+import { judgeVerbFirst } from "../judges/judge-verb-first.ts";
 import type { Rule } from "../../types.ts";
 
 /**
@@ -9,7 +9,7 @@ export const functionsStartWithVerb: Rule[] = [
   {
     id: "fn/verb-first",
     select: { kind: ["function", "method"] },
-    judge: verbFirst(),
+    judge: judgeVerbFirst(),
     message:
       "A function name reads best as a command: a verb first, then the thing it acts on, "
       + "with no second reading. Think about what the function actually does.",

@@ -22,7 +22,7 @@ const pieces = (name: string) =>
  * since a dot cannot tell an extension (`the-thing.test.ts`)
  * from a name part (`com.google.event`, `Dockerfile.theThing`).
  */
-export const casing =
+export const matchesCase =
   (style: CaseStyle): Check =>
     (id) => {
       const ps = pieces(id.name);

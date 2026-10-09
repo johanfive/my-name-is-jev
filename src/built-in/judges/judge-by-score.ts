@@ -6,7 +6,7 @@ import type { EntryType, ScoreCriteria } from "@typesafe-ai/sdk";
  * One scored question about the identifier along `legend`, one verdict.
  * Fails when the score leaves `[min, max]`.
  */
-export const score =
+export const judgeByScore =
   ({
     ask,
     legend,

@@ -36,7 +36,7 @@ export function relativize(
  * A directory is new only if it does not exist on disk yet;
  * the file's newness is the caller's (`isNew`).
  */
-export function fromPath(
+export function extractFromPath(
   filePath: string,
   { isNew = true, isDir = false, root = process.env.CLAUDE_PROJECT_DIR ?? process.cwd() } = {},
 ): Identifier[] {
@@ -63,5 +63,5 @@ export function fromPath(
 
 export const pathExtractor: Extractor = {
   test: () => true,
-  extract: (filePath) => fromPath(filePath),
+  extract: (filePath) => extractFromPath(filePath),
 };

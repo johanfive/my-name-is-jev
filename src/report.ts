@@ -41,7 +41,7 @@ const section = (heading: string, fs: Finding[]) =>
  * so one deny or ask covers all of them and the agent's re-emit fixes everything at once.
  * When nothing blocks or asks, failed checks are stated firmly and judge verdicts as advice.
  */
-export function report(findings: Finding[], config: ResolvedConfig): Report | null {
+export function buildReport(findings: Finding[], config: ResolvedConfig): Report | null {
   if (!findings.length) return null;
   const severityOf = (f: Finding): Severity => f.rule.severity ?? config.severity;
   const decision = RANK.find((s) => findings.some((f) => severityOf(f) === s))!;

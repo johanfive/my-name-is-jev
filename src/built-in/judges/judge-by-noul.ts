@@ -7,7 +7,7 @@ import type { EntryType, NoulQuestion } from "@typesafe-ai/sdk";
  * One yes/no question about the identifier, one verdict.
  * Fails when the answer is `failWhen` past `threshold`.
  */
-export const noul =
+export const judgeByNoul =
   ({
     ask,
     criteria,

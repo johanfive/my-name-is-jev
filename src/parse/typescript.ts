@@ -67,7 +67,11 @@ const factsOf = (sf: ts.SourceFile, fn: Fn): Facts => ({
  * Declared identifiers with their kind and the signature facts that are cheap to read.
  * Usages, imports and `_`-prefixed names are skipped.
  */
-export function fromTypeScript(filePath: string, content: string, isNew = true): Identifier[] {
+export function extractFromTypeScript(
+  filePath: string,
+  content: string,
+  isNew = true,
+): Identifier[] {
   const ext = filePath.match(EXT)?.[0] ?? ".ts";
   const sf = ts.createSourceFile(
     filePath,
@@ -133,5 +137,5 @@ export function fromTypeScript(filePath: string, content: string, isNew = true):
 
 export const typescriptExtractor: Extractor = {
   test: (filePath) => EXT.test(filePath),
-  extract: (filePath, content) => fromTypeScript(filePath, content),
+  extract: (filePath, content) => extractFromTypeScript(filePath, content),
 };

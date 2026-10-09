@@ -15,10 +15,10 @@ const skip = (rule: Rule, id: Identifier, err: unknown) =>
  * A rule that throws is skipped and logged: fail open, always.
  * Only new identifiers are considered.
  */
-export async function run(
+export async function runRules(
   rules: Rule[],
   identifiers: Identifier[],
-  judgeCtx: ((id: Identifier) => JudgeCtx) | null,
+  createJudgeCtx: ((id: Identifier) => JudgeCtx) | null,
 ): Promise<Finding[]> {
   const perIdentifier = identifiers
     .filter((id) => id.isNew)
@@ -35,9 +35,9 @@ export async function run(
           skip(rule, identifier, err);
         }
       }
-      if (findings.length || !judgeCtx) return findings;
+      if (findings.length || !createJudgeCtx) return findings;
 
-      const ctx = judgeCtx(identifier);
+      const ctx = createJudgeCtx(identifier);
       const judged = await Promise.all(
         applicable
           .filter((rule) => rule.judge)

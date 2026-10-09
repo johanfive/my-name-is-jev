@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import type { Extractor, Identifier } from "../types.ts";
-import { fromBash } from "./bash.ts";
+import { extractFromBash } from "./bash.ts";
 import { relativize } from "./path.ts";
 
 type Change = { path: string; before: string | null; after: string };
@@ -51,9 +51,13 @@ const keyOf = (id: Identifier) => `${id.kind}:${id.name}`;
  * a directory when it does not exist on disk,
  * anything else when `kind:name` is not in the previous content.
  */
-export function parse(toolName: string, input: unknown, extractors: Extractor[]): Identifier[] {
+export function parseToolCall(
+  toolName: string,
+  input: unknown,
+  extractors: Extractor[],
+): Identifier[] {
   const tool = (input ?? {}) as ToolInput;
-  if (toolName === "Bash") return fromBash(String(tool.command ?? ""));
+  if (toolName === "Bash") return extractFromBash(String(tool.command ?? ""));
   const change = changeFor(toolName, tool);
   if (!change) return [];
 

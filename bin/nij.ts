@@ -4,9 +4,9 @@ import { join } from "node:path";
 import { parseArgs } from "node:util";
 import { loadConfig } from "../src/config.ts";
 import { tokenize } from "../src/tokenize.ts";
-import { createJev, judgeCtx, resolveProjectDir } from "../src/jev-client.ts";
-import { fromPath } from "../src/parse/path.ts";
-import { run, selects } from "../src/pipeline.ts";
+import { createJev, createJudgeCtx, resolveProjectDir } from "../src/jev-client.ts";
+import { extractFromPath } from "../src/parse/path.ts";
+import { runRules, selects } from "../src/pipeline.ts";
 import { formatFinding } from "../src/report.ts";
 import type { Identifier, Kind } from "../src/types.ts";
 
@@ -41,7 +41,7 @@ const jev = createJev(config, (_state, _questions, answers, cached) => {
 const ctxFor = (all: Identifier[]) =>
   jev
   && ((id: Identifier) =>
-    judgeCtx(
+    createJudgeCtx(
       jev,
       id,
       all.filter((o) => o !== id),
@@ -52,7 +52,7 @@ if (command === "explain" && rest[0]) {
   console.log(`config: ${config.sources.join(" + ") || "none"}`);
   const id: Identifier | undefined =
     values.kind === "file"
-      ? fromPath(rest[0]).at(-1)
+      ? extractFromPath(rest[0]).at(-1)
       : {
           name: rest[0],
           kind: values.kind as Kind,
@@ -65,7 +65,7 @@ if (command === "explain" && rest[0]) {
     process.exit(0);
   }
   console.log(`${id.name} → ${JSON.stringify(id.segments)} as ${id.kind}`);
-  const findings = await run(config.rules, [id], ctxFor([id]));
+  const findings = await runRules(config.rules, [id], ctxFor([id]));
   const checkFailed = findings.some((f) => f.rule.check);
   for (const rule of config.rules) {
     if (!selects(rule.select, id)) continue;
@@ -82,7 +82,7 @@ if (command === "explain" && rest[0]) {
     const ids = config.extractors
       .filter((x) => x.test(file))
       .flatMap((x) => x.extract(file, content));
-    for (const f of await run(config.rules, ids, ctxFor(ids))) {
+    for (const f of await runRules(config.rules, ids, ctxFor(ids))) {
       const sev = f.rule.severity ?? config.severity;
       blocked ||= sev === "block";
       console.log(`${sev.toUpperCase().padEnd(5)} ${formatFinding(f)}`);
@@ -100,7 +100,7 @@ if (command === "explain" && rest[0]) {
     console.log(cache.file);
     console.log(
       `${rows} answers, ${(bytes / 1024).toFixed(0)} KiB, `
-      + `max ${config.cache.maxEntries} answers / ${config.cache.maxAgeDays} days since last use`,
+      + `max ${config.cache.entriesMax} answers / ${config.cache.ageMaxDays} days since last use`,
     );
   }
 } else {

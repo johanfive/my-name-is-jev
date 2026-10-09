@@ -52,18 +52,18 @@ const EXTENSION_LEVEL =
  * A function's leading verb is left out: it is the action, not part of the thing named.
  * A map is named `<value>By<key>`: each side of a `by` is ordered on its own,
  * never against the other.
- * Two words are enough to be out of order (`totalRevenue`), so `minSegments` defaults to 2.
+ * Two words are enough to be out of order (`totalRevenue`), so `segmentsMin` defaults to 2.
  * A file name gets one more level, for extensions and tool suffixes:
  * a dot alone cannot tell `the-thing.test.ts` from `com.google.event`, so this is Jev's call.
  * The verdict carries no detail: the rule's message states the convention
  * and the agent, who knows the context, works out what to do with it.
  */
-export const ordered =
-  ({ minSegments = 2, margin = 0.2 } = {}): Judge =>
+export const judgeStableToVariable =
+  ({ segmentsMin = 2, margin = 0.2 } = {}): Judge =>
     async (id, ctx) => {
       const isCallable = id.kind === "function" || id.kind === "method";
       const sides = splitAtBy(isCallable ? id.segments.slice(1) : id.segments);
-      if (sides.every((side) => side.length < minSegments)) return { ok: true };
+      if (sides.every((side) => side.length < segmentsMin)) return { ok: true };
       const words = sides.flat();
       const sideOf = sides.flatMap((side, n) => side.map(() => n));
       const levels = id.kind === "file" ? [...LEVELS, EXTENSION_LEVEL] as const : LEVELS;
