@@ -105,8 +105,8 @@ async function evaluateIdentifiers(
 
 /**
  * The report and the missing-key notice in Claude Code's hook format. Null when both are empty.
- * A deny or ask becomes the permission decision; a fix, the block decision that sends the agent
- * back to rename (after a failed call it can only be context); a warning is context.
+ * A deny or ask becomes the permission decision; a required fix, the block decision that sends
+ * the agent back to rename (after a failed call it can only be context); a warning is context.
  * A warning carries no `permissionDecision`: "allow" would skip the user's own permission
  * prompt for the tool call.
  */
@@ -126,7 +126,7 @@ function toHookOutput(event: HookEventName, judgement: Judgement | null): HookOu
       ...output,
     };
   }
-  if (report.decision === "fix" && event === "PostToolUse") {
+  if (report.decision === "requireFix" && event === "PostToolUse") {
     return { decision: "block", reason: report.text, ...output };
   }
   const hookSpecificOutput = { hookEventName: event, additionalContext: report.text };
