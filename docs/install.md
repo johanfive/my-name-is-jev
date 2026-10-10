@@ -16,14 +16,20 @@ claude plugin install my-name-is-jev@my-name-is-jev
 ```
 
 Claude Code asks for a Jev API key when it enables the plugin. The key goes to the OS credential store, never to a
-settings file. To set or change it later, or to point at another backend such as OpenRouter:
+settings file. To set or change it later, to point at another backend such as OpenRouter, or to pick the model:
 
 ```
 /plugin configure my-name-is-jev
 ```
 
 Without a key only the mechanical checks run, and a one-line notice says so once per session. The environment
-variables `NIJ_JEV_API_KEY` and `NIJ_JEV_BASE_URL` work too.
+variables `NIJ_JEV_API_KEY`, `NIJ_JEV_BASE_URL` and `NIJ_JEV_MODEL` work too.
+
+Without Node 24 on the `PATH` nothing runs, and a one-line notice says so when a session starts.
+
+The `nij` command is on Claude's `PATH` while the plugin is enabled, so you can ask Claude to run `nij stats`
+(what became of the names nij flagged in this project), `nij explain <name>` or `nij data`. Everything nij keeps
+is one SQLite file in the plugin's data directory, which Claude Code removes when you uninstall the plugin.
 
 Without a `nij.config.ts` the built-in presets apply at `warn`. To change the rules, write one in the project root,
 or in `~/.claude/` for every project.

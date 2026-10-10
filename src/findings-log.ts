@@ -1,5 +1,5 @@
 import type { DatabaseSync } from "node:sqlite";
-import { openCacheDb } from "./cache.ts";
+import { openDataDb } from "./data.ts";
 import type { Outcome } from "./report.ts";
 import type { Finding, Kind, ResolvedConfig } from "./types.ts";
 
@@ -24,12 +24,12 @@ export type FindingsLog = {
 };
 
 /**
- * The log of what nij flagged, in the cache database, so `nij stats` can tell which names
- * were renamed and which were kept. Null when the cache is off: no Jev answers on disk means
+ * The log of what nij flagged, in the data file, so `nij stats` can tell which names
+ * were renamed and which were kept. Null when data is off: no Jev answers on disk means
  * no record of names either.
  */
 export function openFindingsLog(config: ResolvedConfig): FindingsLog | null {
-  const opened = openCacheDb(config);
+  const opened = openDataDb(config);
   return opened && createFindingsLog(opened.db);
 }
 

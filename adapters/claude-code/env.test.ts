@@ -45,23 +45,30 @@ describe("adoptHookHomes", () => {
       CLAUDE_PLUGIN_DATA: "/data",
       CLAUDE_PLUGIN_OPTION_JEV_API_KEY: "key",
       CLAUDE_PLUGIN_OPTION_JEV_BASE_URL: "https://jev",
+      CLAUDE_PLUGIN_OPTION_JEV_MODEL: "fake-model",
     });
     assert.deepEqual(nijEnv, {
-      NIJ_CACHE_DIR: "/data",
+      NIJ_DATA_DIR: "/data",
       NIJ_CONFIG_DIR: "/claude",
       NIJ_JEV_API_KEY: "key",
       NIJ_JEV_BASE_URL: "https://jev",
+      NIJ_JEV_MODEL: "fake-model",
     });
+  });
+
+  test("falls back to the plugin's known data directory outside a plugin process", (t) => {
+    const nijEnv = getNijEnv(t, () => adoptHookHomes(), {});
+    assert.equal(nijEnv.NIJ_DATA_DIR, DATA_DIR);
   });
 
   test("lets an explicit NIJ_* variable win", (t) => {
     const nijEnv = getNijEnv(t, () => adoptHookHomes(), {
       CLAUDE_PLUGIN_DATA: "/data",
       CLAUDE_PLUGIN_OPTION_JEV_API_KEY: "plugin-key",
-      NIJ_CACHE_DIR: "/mine",
+      NIJ_DATA_DIR: "/mine",
       NIJ_JEV_API_KEY: "my-key",
     });
-    assert.equal(nijEnv.NIJ_CACHE_DIR, "/mine");
+    assert.equal(nijEnv.NIJ_DATA_DIR, "/mine");
     assert.equal(nijEnv.NIJ_JEV_API_KEY, "my-key");
   });
 });
@@ -69,7 +76,17 @@ describe("adoptHookHomes", () => {
 describe("adoptInstalledPluginHomes", () => {
   test("points the CLI at the installed plugin's data and Claude's config directory", (t) => {
     const nijEnv = getNijEnv(t, () => adoptInstalledPluginHomes(), {});
-    assert.deepEqual(nijEnv, { NIJ_CACHE_DIR: DATA_DIR, NIJ_CONFIG_DIR: "/claude" });
+    assert.deepEqual(nijEnv, { NIJ_DATA_DIR: DATA_DIR, NIJ_CONFIG_DIR: "/claude" });
+  });
+
+  test("follows a moved plugins root", (t) => {
+    existsSyncMock.mock.mockImplementation((path) => path.startsWith("/elsewhere"));
+    t.mock.property(process, "env", {
+      CLAUDE_CONFIG_DIR: "/claude",
+      CLAUDE_CODE_PLUGIN_CACHE_DIR: "/elsewhere",
+    });
+    adoptInstalledPluginHomes();
+    assert.equal(process.env.NIJ_DATA_DIR, "/elsewhere/data/my-name-is-jev-my-name-is-jev");
   });
 
   test("changes nothing when the plugin is not installed", (t) => {
@@ -78,7 +95,7 @@ describe("adoptInstalledPluginHomes", () => {
   });
 
   test("lets an explicit NIJ_* variable win", (t) => {
-    const nijEnv = getNijEnv(t, () => adoptInstalledPluginHomes(), { NIJ_CACHE_DIR: "/mine" });
-    assert.equal(nijEnv.NIJ_CACHE_DIR, "/mine");
+    const nijEnv = getNijEnv(t, () => adoptInstalledPluginHomes(), { NIJ_DATA_DIR: "/mine" });
+    assert.equal(nijEnv.NIJ_DATA_DIR, "/mine");
   });
 });

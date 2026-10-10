@@ -23,21 +23,21 @@ const fakeRecord = (overrides: Partial<FindingRecord> = {}): FindingRecord => ({
 });
 
 /**
- * Opens a findings log in a temp cache directory, removed when the test ends.
+ * Opens a findings log in a temp data directory, removed when the test ends.
  *
  * @param t The test context the environment mock and the cleanup belong to.
- * @param cacheOption The config's `cache` setting.
- * @returns The log, or null when the cache is off.
+ * @param dataOption The config's `data` setting.
+ * @returns The log, or null when data is off.
  */
-function openTestLog(t: TestContext, cacheOption: false | { ageMaxDays?: number } = {}) {
+function openTestLog(t: TestContext, dataOption: false | { ageMaxDays?: number } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "nij-test-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
-  t.mock.property(process, "env", { NIJ_CACHE_DIR: dir });
-  return openFindingsLog(resolveConfig({ rules: [], cache: cacheOption }));
+  t.mock.property(process, "env", { NIJ_DATA_DIR: dir });
+  return openFindingsLog(resolveConfig({ rules: [], data: dataOption }));
 }
 
 describe("openFindingsLog", () => {
-  test("returns null when the cache is off", (t) => {
+  test("returns null when data is off", (t) => {
     const log = openTestLog(t, false);
     assert.equal(log, null);
   });
@@ -71,11 +71,11 @@ describe("openFindingsLog", () => {
     assert.deepEqual(sessions, ["second"]);
   });
 
-  test("forgets records older than the cache's age limit on open", (t) => {
+  test("forgets records older than the age limit on open", (t) => {
     const log = openTestLog(t, { ageMaxDays: 1 })!;
     const stale = fakeRecord({ name: "stale", recordedAt: Date.now() - 2 * 86_400_000 });
     log.record([stale, fakeRecord({ name: "fresh" })]);
-    const reopened = openFindingsLog(resolveConfig({ rules: [], cache: { ageMaxDays: 1 } }))!;
+    const reopened = openFindingsLog(resolveConfig({ rules: [], data: { ageMaxDays: 1 } }))!;
     const names = reopened.list("/project").map((record) => record.name);
     assert.deepEqual(names, ["fresh"]);
   });

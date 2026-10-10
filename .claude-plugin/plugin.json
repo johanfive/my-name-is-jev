@@ -18,6 +18,11 @@
       "type": "string",
       "title": "Jev base URL",
       "description": "Leave empty for TypeSafe AI. Set for another backend, such as https://openrouter.ai/api."
+    },
+    "jev_model": {
+      "type": "string",
+      "title": "Jev model",
+      "description": "Leave empty for the backend's default. Set to pick the decision model, such as an OpenRouter model id."
     }
   }
 }

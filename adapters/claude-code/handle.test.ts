@@ -53,7 +53,7 @@ before(async () => {
     severity,
     extractors: [pathExtractor, typescriptExtractor],
     jev: {},
-    cache: { enabled: false, entriesMax: 0, ageMaxDays: 0 },
+    data: { enabled: false, entriesMax: 0, ageMaxDays: 0 },
     sources: [],
   });
 });
@@ -108,7 +108,7 @@ async function getHookOutput(
     identifiersChanged?: Identifier[];
   } = {},
 ): Promise<unknown> {
-  t.mock.property(process, "env", { CLAUDE_PROJECT_DIR: "/project", NIJ_CACHE_DIR: "/cache" });
+  t.mock.property(process, "env", { CLAUDE_PROJECT_DIR: "/project", NIJ_DATA_DIR: "/cache" });
   t.mock.method(process.stderr, "write", () => true);
   for (const fn of [
     loadConfigMock,
