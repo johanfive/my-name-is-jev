@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { after, before, describe, mock, test, type TestContext } from "node:test";
 import { typescript } from "../../src/built-in/presets/typescript.ts";
+import { toFindingRecords, type FindingRecord } from "../../src/findings-log.ts";
 import { typescriptExtractor } from "../../src/parse/typescript.ts";
 import type { Identifier, ResolvedConfig, Severity } from "../../src/types.ts";
 import type { HookInput } from "./handle.ts";
@@ -13,6 +14,7 @@ const existsSyncMock = mock.fn((_path: string) => false);
 const readFileSyncMock = mock.fn((_path: string): string => "");
 const writeFileSyncMock = mock.fn((_path: string, _content: string) => {});
 const loadConfigMock = mock.fn(async (): Promise<ResolvedConfig | undefined> => undefined);
+const recordFindingsMock = mock.fn((_records: FindingRecord[]) => {});
 const snapshotWorkingTreeMock = mock.fn((_root: string): string | null => null);
 const extractFromTreeDiffMock = mock.fn(
   (_root: string, _before: string, _after: string, _extractors: unknown): Identifier[] => [],
@@ -32,6 +34,12 @@ before(async () => {
     },
   });
   mock.module("../../src/config.ts", { exports: { loadConfig: loadConfigMock } });
+  mock.module("../../src/findings-log.ts", {
+    exports: {
+      toFindingRecords,
+      openFindingsLog: () => ({ record: recordFindingsMock, list: () => [] }),
+    },
+  });
   mock.module("../../src/parse/working-tree.ts", {
     exports: {
       snapshotWorkingTree: snapshotWorkingTreeMock,
@@ -106,6 +114,7 @@ async function getHookOutput(
     loadConfigMock,
     writeFileSyncMock,
     extractFromTreeDiffMock,
+    recordFindingsMock,
   ]) {
     fn.mock.resetCalls();
   }
@@ -157,6 +166,27 @@ describe("handle", () => {
       assert.equal((output as { systemMessage?: string }).systemMessage, undefined);
     });
   }
+
+  test("logs what it flagged, with the session and the outcome", async (t) => {
+    await getHookOutput(t, fakeWrite("const bad_name = 1;"), { severity: "block" });
+    const logged = recordFindingsMock.mock.calls[0].arguments[0].map(
+      ({ project, rule, name, session, outcome }) => ({ project, rule, name, session, outcome }),
+    );
+    assert.deepEqual(logged, [
+      {
+        project: "/project",
+        rule: "ts/const",
+        name: "bad_name",
+        session: "fake-session",
+        outcome: "deny",
+      },
+    ]);
+  });
+
+  test("logs nothing when nothing was flagged", async (t) => {
+    await getHookOutput(t, fakeWrite("const userCache = 1;"));
+    assert.equal(recordFindingsMock.mock.callCount(), 0);
+  });
 
   describe("tells the human the Jev key is missing", () => {
     test("once per session, remembering the session it told", async (t) => {

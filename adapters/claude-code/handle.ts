@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node
 import { dirname, join } from "node:path";
 import { resolveCacheDir } from "../../src/cache.ts";
 import { loadConfig } from "../../src/config.ts";
+import { openFindingsLog, toFindingRecords } from "../../src/findings-log.ts";
 import { createJev, createJudgeCtxFor } from "../../src/jev-client.ts";
 import { parseToolCall } from "../../src/parse/index.ts";
 import { extractFromTreeDiff, snapshotWorkingTree } from "../../src/parse/working-tree.ts";
@@ -100,7 +101,19 @@ async function evaluateIdentifiers(
   const jev = createJev(config);
   const notice = jev ? undefined : warnKeyMissingOnce(sessionId);
   const findings = await runRules(config.rules, identifiers, createJudgeCtxFor(jev, identifiers));
-  return { report: buildReport(findings, config, { isWritten }), notice };
+  const report = buildReport(findings, config, { isWritten });
+  if (report) logFindings(config, report, sessionId);
+  return { report, notice };
+}
+
+/** Keep what was flagged, so `nij stats` can later tell what became of each name. */
+function logFindings(config: ResolvedConfig, report: Report, sessionId = "unknown") {
+  const records = toFindingRecords(report.findings, {
+    project: resolveProjectDir(),
+    session: sessionId,
+    outcome: report.decision,
+  });
+  openFindingsLog(config)?.record(records);
 }
 
 /**

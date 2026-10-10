@@ -2,13 +2,16 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
+import { adoptInstalledPluginHomes } from "../adapters/claude-code/env.ts";
 import type { AnswerCache } from "../src/cache.ts";
 import { loadConfig } from "../src/config.ts";
+import { openFindingsLog } from "../src/findings-log.ts";
 import { createJev, createJudgeCtxFor, type Jev } from "../src/jev-client.ts";
 import { extractFromPath } from "../src/parse/path.ts";
 import { runRules, selects } from "../src/pipeline.ts";
 import { resolveProjectDir } from "../src/project-dir.ts";
 import { formatFinding, severityOf } from "../src/report.ts";
+import { computeStats, type RuleStats } from "../src/stats.ts";
 import { tokenize } from "../src/tokenize.ts";
 import type {
   Answers,
@@ -22,6 +25,7 @@ import type {
 const USAGE =
   "usage: nij explain <name> [--kind k] [--file p]\n"
   + "       nij check <files...>\n"
+  + "       nij stats\n"
   + "       nij cache [clear]";
 
 await main();
@@ -37,12 +41,14 @@ async function main() {
   });
   const [command, ...operands] = positionals;
   loadDotEnv();
+  adoptInstalledPluginHomes();
   const config = await loadConfig();
   const jev = createJev(config, printTrace);
 
   if (command === "explain" && operands[0]) {
     await explain(operands[0], values.kind as Kind, values.file!, config, jev);
   } else if (command === "check" && operands.length) await check(operands, config, jev);
+  else if (command === "stats") showStats(config);
   else if (command === "cache") showCache(operands[0], config, jev?.cache ?? null);
   else {
     console.log(USAGE);
@@ -135,6 +141,47 @@ async function checkFile(file: string, config: ResolvedConfig, jev: Jev | null) 
 function printFinding(finding: Finding, config: ResolvedConfig) {
   const severity = severityOf(finding, config);
   console.log(`${severity.toUpperCase().padEnd(5)} ${formatFinding(finding)}`);
+}
+
+/**
+ * Show, per rule, what became of the names the hook flagged in this project:
+ * renamed, kept, or gone with their file. The measure of whether a rule earns its keep.
+ */
+function showStats(config: ResolvedConfig) {
+  const log = openFindingsLog(config);
+  if (!log) {
+    console.log("stats: off (cache: false)");
+    return;
+  }
+  const records = log.list(resolveProjectDir());
+  if (!records.length) {
+    console.log("stats: nothing flagged in this project yet");
+    return;
+  }
+  const since = new Date(records[0].recordedAt).toISOString().slice(0, 10);
+  console.log(`${records.length} names flagged since ${since}`);
+  console.log(formatStatsTable(computeStats(records, resolveProjectDir(), config.extractors)));
+}
+
+/** One row per rule, columns aligned. */
+function formatStatsTable(stats: RuleStats[]): string {
+  const ruleWidth = Math.max("rule".length, ...stats.map(({ rule }) => rule.length));
+  const formatRow = (cells: (string | number)[]) =>
+    [String(cells[0]).padEnd(ruleWidth), ...cells.slice(1).map((cell) => String(cell).padStart(8))]
+      .join("");
+  const header = formatRow([
+    "rule",
+    "renamed",
+    "kept",
+    "gone",
+  ]);
+  const rows = stats.map(({ rule, renamed, kept, gone }) => formatRow([
+    rule,
+    renamed,
+    kept,
+    gone,
+  ]));
+  return [header, ...rows].join("\n");
 }
 
 /** Show where the answer cache lives and how full it is, or clear it. */

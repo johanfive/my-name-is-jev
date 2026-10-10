@@ -105,7 +105,10 @@ export type Config = {
   severity?: Severity;
   extractors?: Extractor[];
   jev?: { baseURL?: string; model?: string };
-  /** Jev answers are cached on disk, bounded by rows and days since last use. `false` disables. */
+  /**
+   * Jev answers are cached on disk, bounded by rows and days since last use, and the names nij
+   * flagged are logged next to them for `nij stats`. `false` disables both.
+   */
   cache?: false | { entriesMax?: number; ageMaxDays?: number };
   /** Also apply the user-level config. A project sets `false` to opt out of it. */
   global?: boolean;
