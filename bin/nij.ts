@@ -2,6 +2,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
+import { adoptInstalledPluginHomes } from "../adapters/claude-code/env.ts";
 import type { AnswerCache } from "../src/cache.ts";
 import { loadConfig } from "../src/config.ts";
 import { openFindingsLog } from "../src/findings-log.ts";
@@ -40,6 +41,7 @@ async function main() {
   });
   const [command, ...operands] = positionals;
   loadDotEnv();
+  adoptInstalledPluginHomes();
   const config = await loadConfig();
   const jev = createJev(config, printTrace);
 

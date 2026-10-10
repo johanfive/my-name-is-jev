@@ -11,7 +11,9 @@ outcome and time. A name flagged again by the same rule replaces its earlier row
 keeps no Jev answers on disk keeps no record of names either, and one switch beats two. Nothing
 is printed when a row is written. `nij stats` reads the rows of the current project and tells,
 per rule, how many names were renamed, kept or lost with their file, by extracting each file
-again today.
+again today. For that the CLI has to open the database the hook wrote: when the plugin is
+installed, the CLI adopts the agent's data and config directories the way the hook does
+(ADR 0004's order is unchanged; `NIJ_CACHE_DIR` still overrides), so hook and CLI agree.
 
 **Alternatives.** A separate log file: a second location, a second pruning policy and a parser,
 for data the database already holds in one query. An opt-in setting: `nij stats` is useless
