@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { resolveCacheDir } from "../../src/cache.ts";
+import { resolveDataDir } from "../../src/data.ts";
 import { loadConfig } from "../../src/config.ts";
 import { openFindingsLog, toFindingRecords } from "../../src/findings-log.ts";
 import { createJev, createJudgeCtxFor } from "../../src/jev-client.ts";
@@ -161,7 +161,7 @@ function saveTreeBefore(toolUseId: string | undefined) {
     mkdirSync(dirname(file), { recursive: true });
     writeFileSync(file, tree);
   } catch {
-    /* unwritable cache dir: this call goes unchecked */
+    /* unwritable data dir: this call goes unchecked */
   }
 }
 
@@ -180,7 +180,7 @@ function takeTreeBefore(toolUseId: string | undefined): string | null {
 
 /** Where the tree before a call is kept. The id is made safe to use as a file name. */
 const resolveTreeFile = (toolUseId: string) =>
-  join(resolveCacheDir(), "trees-before", toolUseId.replace(/[^\w-]/g, "_"));
+  join(resolveDataDir(), "trees-before", toolUseId.replace(/[^\w-]/g, "_"));
 
 /**
  * The missing-key notice, once per session, for the human (ADR 0006).
@@ -188,12 +188,12 @@ const resolveTreeFile = (toolUseId: string) =>
  */
 function warnKeyMissingOnce(sessionId = "unknown"): string | undefined {
   try {
-    const marker = join(resolveCacheDir(), "missing-key-notified");
+    const marker = join(resolveDataDir(), "missing-key-notified");
     if (existsSync(marker) && readFileSync(marker, "utf8") === sessionId) return undefined;
     mkdirSync(dirname(marker), { recursive: true });
     writeFileSync(marker, sessionId);
   } catch {
-    /* unwritable cache dir: notify every time rather than never */
+    /* unwritable data dir: notify every time rather than never */
   }
   return KEY_MISSING_NOTICE;
 }

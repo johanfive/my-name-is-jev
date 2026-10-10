@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { TypeSafeClient, type Questions } from "@typesafe-ai/sdk";
-import { openCache, type AnswerCache } from "./cache.ts";
+import { openCache, type AnswerCache } from "./data.ts";
 import { listSiblings } from "./siblings.ts";
 import { withoutUndefined } from "./without-undefined.ts";
 import type { Answers, Identifier, JudgeCtx, ResolvedConfig, State } from "./types.ts";
@@ -187,8 +187,7 @@ function mergeQuestions(askers: Asker[]): Questions {
 /** One line naming the backend, model and cache, so a user can see what nij resolved. */
 function describeBackend(client: TypeSafeClient, keyVar: string, cache: AnswerCache | null) {
   const backend = `${client.baseURL} via ${keyVar}, model ${client.defaultModel}`;
-  const cacheInfo = cache ? `${cache.file} (${cache.stats().rows} answers)` : "off";
-  return `jev: ${backend}, cache ${cacheInfo}`;
+  return `jev: ${backend}, answers cached in ${cache?.file ?? "nothing (data off)"}`;
 }
 
 /** A fixed-length key for any text, however long the question. */

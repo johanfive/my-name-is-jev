@@ -39,10 +39,10 @@ export function resolveConfig(config: Config, sources: string[] = []): ResolvedC
     severity: config.severity ?? "warn",
     extractors: config.extractors ?? [pathExtractor, typescriptExtractor],
     jev: config.jev ?? {},
-    cache:
-      config.cache === false
+    data:
+      config.data === false
         ? { enabled: false, entriesMax: 0, ageMaxDays: 0 }
-        : { enabled: true, entriesMax: 20_000, ageMaxDays: 30, ...config.cache },
+        : { enabled: true, entriesMax: 20_000, ageMaxDays: 30, ...config.data },
     sources,
   };
 }

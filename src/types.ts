@@ -106,17 +106,17 @@ export type Config = {
   extractors?: Extractor[];
   jev?: { baseURL?: string; model?: string };
   /**
-   * Jev answers are cached on disk, bounded by rows and days since last use, and the names nij
-   * flagged are logged next to them for `nij stats`. `false` disables both.
+   * The data file: Jev answers, cached and bounded by rows and days since last use, and the
+   * names nij flagged, logged for `nij stats`. `false` turns both off.
    */
-  cache?: false | { entriesMax?: number; ageMaxDays?: number };
+  data?: false | { entriesMax?: number; ageMaxDays?: number };
   /** Also apply the user-level config. A project sets `false` to opt out of it. */
   global?: boolean;
 };
 
-export type ResolvedConfig = Required<Omit<Config, "jev" | "cache" | "global">> & {
+export type ResolvedConfig = Required<Omit<Config, "jev" | "data" | "global">> & {
   jev: { baseURL?: string; model?: string };
-  cache: { enabled: boolean; entriesMax: number; ageMaxDays: number };
+  data: { enabled: boolean; entriesMax: number; ageMaxDays: number };
   /** The config files that were loaded, user-level first. */
   sources: string[];
 };

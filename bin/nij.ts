@@ -3,8 +3,8 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 import { adoptInstalledPluginHomes } from "../adapters/claude-code/env.ts";
-import type { AnswerCache } from "../src/cache.ts";
 import { loadConfig } from "../src/config.ts";
+import { clearData, inspectData } from "../src/data.ts";
 import { openFindingsLog } from "../src/findings-log.ts";
 import { createJev, createJudgeCtxFor, type Jev } from "../src/jev-client.ts";
 import { extractFromPath } from "../src/parse/path.ts";
@@ -26,7 +26,7 @@ const USAGE =
   "usage: nij explain <name> [--kind k] [--file p]\n"
   + "       nij check <files...>\n"
   + "       nij stats\n"
-  + "       nij cache [clear]";
+  + "       nij data [clear]";
 
 await main();
 
@@ -49,7 +49,7 @@ async function main() {
     await explain(operands[0], values.kind as Kind, values.file!, config, jev);
   } else if (command === "check" && operands.length) await check(operands, config, jev);
   else if (command === "stats") showStats(config);
-  else if (command === "cache") showCache(operands[0], config, jev?.cache ?? null);
+  else if (command === "data") showData(operands[0], config);
   else {
     console.log(USAGE);
     process.exitCode = 2;
@@ -150,7 +150,7 @@ function printFinding(finding: Finding, config: ResolvedConfig) {
 function showStats(config: ResolvedConfig) {
   const log = openFindingsLog(config);
   if (!log) {
-    console.log("stats: off (cache: false)");
+    console.log("stats: off (data: false)");
     return;
   }
   const records = log.list(resolveProjectDir());
@@ -184,24 +184,24 @@ function formatStatsTable(stats: RuleStats[]): string {
   return [header, ...rows].join("\n");
 }
 
-/** Show where the answer cache lives and how full it is, or clear it. */
-function showCache(
-  subcommand: string | undefined,
-  config: ResolvedConfig,
-  cache: AnswerCache | null,
-) {
-  if (!cache) console.log("cache: off");
-  else if (subcommand === "clear") {
-    cache.clear();
-    console.log(`cache cleared: ${cache.file}`);
-  } else {
-    const { rows, bytes } = cache.stats();
-    console.log(cache.file);
-    console.log(
-      `${rows} answers, ${(bytes / 1024).toFixed(0)} KiB, `
-      + `max ${config.cache.entriesMax} answers / ${config.cache.ageMaxDays} days since last use`,
-    );
+/** Show where the data file lives and what it holds, or clear it. */
+function showData(subcommand: string | undefined, config: ResolvedConfig) {
+  if (subcommand === "clear") {
+    const file = clearData(config);
+    console.log(file ? `data cleared: ${file}` : "data: off");
+    return;
   }
+  const summary = inspectData(config);
+  if (!summary) {
+    console.log("data: off");
+    return;
+  }
+  const { file, answers, findings, bytes } = summary;
+  console.log(file);
+  console.log(
+    `${answers} answers, ${findings} findings, ${(bytes / 1024).toFixed(0)} KiB; `
+    + `kept ${config.data.ageMaxDays} days, at most ${config.data.entriesMax} answers`,
+  );
 }
 
 /** Print each Jev answer as it arrives, so `explain` shows the numbers behind a verdict. */

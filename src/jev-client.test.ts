@@ -53,15 +53,9 @@ async function importJevClient(
       }),
     },
   });
-  t.mock.module("./cache.ts", {
+  t.mock.module("./data.ts", {
     exports: {
-      openCache: () => ({
-        file: "fake.sqlite",
-        get: cacheGetMock,
-        set: cacheSetMock,
-        stats: () => ({ rows: 0, bytes: 0 }),
-        clear: () => {},
-      }),
+      openCache: () => ({ file: "fake.sqlite", get: cacheGetMock, set: cacheSetMock }),
     },
   });
   const jevClient: typeof import("./jev-client.ts") =
