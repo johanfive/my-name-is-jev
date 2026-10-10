@@ -12,6 +12,12 @@ const SCHEMA = `
   CREATE TABLE IF NOT EXISTS answers
     (key TEXT PRIMARY KEY, answer TEXT NOT NULL, last_used INTEGER NOT NULL);
   CREATE INDEX IF NOT EXISTS answers_last_used ON answers (last_used);
+  CREATE TABLE IF NOT EXISTS findings (
+    project TEXT NOT NULL, rule TEXT NOT NULL, kind TEXT NOT NULL, name TEXT NOT NULL,
+    file TEXT NOT NULL, line INTEGER, session TEXT NOT NULL, outcome TEXT NOT NULL,
+    recorded_at INTEGER NOT NULL,
+    PRIMARY KEY (project, rule, kind, name, file)
+  );
 `;
 
 export type AnswerCache = {
@@ -31,10 +37,19 @@ export type AnswerCache = {
  * Returns null when the cache is disabled or the directory is unwritable.
  */
 export function openCache(config: ResolvedConfig): AnswerCache | null {
+  const opened = openCacheDb(config);
+  return opened && createAnswerCache(opened.db, opened.file);
+}
+
+/**
+ * The cache database, pruned to the configured limits, for the answer cache and the findings
+ * log, which share it. Null when the cache is disabled or the directory is unwritable.
+ */
+export function openCacheDb(config: ResolvedConfig): { db: DatabaseSync; file: string } | null {
   if (!config.cache.enabled) return null;
   const file = join(resolveCacheDir(), "cache.sqlite");
   const db = openPrunedDb(file, config.cache);
-  return db && createAnswerCache(db, file);
+  return db && { db, file };
 }
 
 /**
@@ -68,11 +83,13 @@ function openPrunedDb(file: string, limits: ResolvedConfig["cache"]): DatabaseSy
 }
 
 /**
- * Delete the rows unused for too long, then the least recently used past the row limit.
- * This is what keeps the cache bounded.
+ * Delete the answers unused for too long, then the least recently used past the row limit,
+ * and the findings recorded too long ago. This is what keeps the database bounded.
  */
 function pruneDb(db: DatabaseSync, { entriesMax, ageMaxDays }: ResolvedConfig["cache"]) {
-  db.prepare("DELETE FROM answers WHERE last_used < ?").run(Date.now() - ageMaxDays * DAY_MS);
+  const oldest = Date.now() - ageMaxDays * DAY_MS;
+  db.prepare("DELETE FROM answers WHERE last_used < ?").run(oldest);
+  db.prepare("DELETE FROM findings WHERE recorded_at < ?").run(oldest);
   db.prepare(
     "DELETE FROM answers WHERE key IN "
     + "(SELECT key FROM answers ORDER BY last_used DESC LIMIT -1 OFFSET ?)",

@@ -9,3 +9,5 @@ export { runRules } from "./pipeline.ts";
 export { buildReport, formatFinding, severityOf, type Outcome, type Report } from "./report.ts";
 export { createJev, createJudgeCtx, createJudgeCtxFor } from "./jev-client.ts";
 export { loadConfig, resolveConfig } from "./config.ts";
+export { openFindingsLog, toFindingRecords, type FindingRecord } from "./findings-log.ts";
+export { computeStats, type RuleStats } from "./stats.ts";
