@@ -7,7 +7,9 @@ import { resolveConfig } from "./config.ts";
 import { openFindingsLog, type FindingRecord } from "./findings-log.ts";
 
 // These tests run the real node:sqlite in a temp directory: what they check is the
-// database's answer, and a mocked database would only test the mock.
+// database's answer, and a mocked database would only test the mock. That is acceptable
+// only because SQLite is an in-process library over a local file: no server, no network,
+// no shared state, and the file dies with the test. A real database would be mocked.
 
 const fakeRecord = (overrides: Partial<FindingRecord> = {}): FindingRecord => ({
   project: "/project",
