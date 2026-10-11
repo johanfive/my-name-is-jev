@@ -88,10 +88,16 @@ async function explain(
     return;
   }
   console.log(`${id.name} → ${JSON.stringify(id.segments)} as ${id.kind}`);
-  const findings = await runRules(config.rules, [id], createJudgeCtxFor(jev, [id]));
+  const errByRule = new Map<Rule, unknown>();
+  const findings = await runRules(
+    config.rules,
+    [id],
+    createJudgeCtxFor(jev, [id]),
+    (rule, _id, err) => errByRule.set(rule, err),
+  );
   const checkFailed = findings.some((finding) => finding.rule.check);
   for (const rule of config.rules.filter((rule) => selects(rule.select, id))) {
-    console.log(describeOutcome(rule, findings, checkFailed, jev !== null));
+    console.log(describeOutcome(rule, findings, errByRule, checkFailed, jev !== null));
   }
 }
 
@@ -105,9 +111,18 @@ function toIdentifier(name: string, kind: Kind, file: string): Identifier | unde
 }
 
 /** One rule's line in `explain`: ✗ with the detail, – skipped with the reason, or ✓. */
-function describeOutcome(rule: Rule, findings: Finding[], checkFailed: boolean, hasJev: boolean) {
+function describeOutcome(
+  rule: Rule,
+  findings: Finding[],
+  errByRule: Map<Rule, unknown>,
+  checkFailed: boolean,
+  hasJev: boolean,
+) {
   const finding = findings.find((finding) => finding.rule === rule);
   if (finding) return `✗ ${rule.id}: ${finding.verdict.detail ?? ""}`;
+  if (errByRule.has(rule)) {
+    return `– ${rule.id}: skipped (${(errByRule.get(rule) as Error).message})`;
+  }
   if (rule.judge && (checkFailed || !hasJev)) {
     return `– ${rule.id}: skipped (${hasJev ? "a check failed" : "no Jev"})`;
   }
