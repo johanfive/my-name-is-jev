@@ -108,4 +108,15 @@ describe("runRules", () => {
       assert.match(logged, /rule broken skipped on userCache: boom/);
     });
   });
+
+  test("tells onSkip, in place of the log, about a rule that throws", async (t) => {
+    const stderrMock = t.mock.method(process.stderr, "write", () => true);
+    const onSkip = t.mock.fn();
+    const broken = mockThrowingRule(t, "judge");
+    await runRules([broken], [fakeIdentifier], () => fakeJudgeCtx, onSkip);
+    const call = onSkip.mock.calls[0];
+    assert.equal(call.arguments.at(0), broken);
+    assert.equal((call.arguments.at(2) as Error).message, "boom");
+    assert.equal(stderrMock.mock.callCount(), 0);
+  });
 });
